@@ -41,8 +41,10 @@ go test ./...
 
 ```bash
 go run ./cmd/soundctl --help
+go run ./cmd/soundctl help build-first-command
 go run ./cmd/soundctl devices --help
 go run ./cmd/soundctl sinks --help
+go run ./cmd/soundctl scan pair --help
 ```
 
 ### 3) Read-path smoke commands
@@ -50,6 +52,8 @@ go run ./cmd/soundctl sinks --help
 ```bash
 go run ./cmd/soundctl devices status --output json
 go run ./cmd/soundctl devices list --output json
+go run ./cmd/soundctl scan discover --wait 8 --output json
+go run ./cmd/soundctl scan discover --wait 8 --with-glaze-output --output json
 go run ./cmd/soundctl sinks list --output json
 go run ./cmd/soundctl sources list --output json
 go run ./cmd/soundctl profiles list --output json
@@ -80,6 +84,7 @@ Run only when you intend to change system state:
 go run ./cmd/soundctl devices connect --addr 08:FF:44:2B:4C:90 --output json
 go run ./cmd/soundctl devices disconnect --addr 08:FF:44:2B:4C:90 --output json
 go run ./cmd/soundctl scan pair --addr 08:FF:44:2B:4C:90 --trust --connect --output json
+go run ./cmd/soundctl scan pair --wait 8 --name-filter \"airpods\" --trust --with-glaze-output --output json
 
 # audio
 go run ./cmd/soundctl sinks set-default --sink alsa_output.pci-0000_00_1f.3.analog-stereo --output json

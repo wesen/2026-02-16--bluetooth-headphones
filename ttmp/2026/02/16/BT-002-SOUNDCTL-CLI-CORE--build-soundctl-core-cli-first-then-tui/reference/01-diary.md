@@ -438,3 +438,90 @@ The update adds a dedicated `devices status` command (controller-level state) an
 - Live verification showed:
   - `devices status` now returns `powered/pairable/scanning`
   - `devices list` now returns `mode/paired/trusted/connected/scanning`
+
+## Step 6: Add dual-mode scan/pair primitives with wait-based discovery and initialize help system
+
+After confirming that one-shot `scan start` was not a reliable verification primitive, I added a timed discovery primitive and refactored scan commands to dual mode. I also wired the Glazed help system at root and verified `help build-first-command` is available from `soundctl`.
+
+This gives two practical operation modes:
+- default normal mode for human-readable troubleshooting
+- `--with-glaze-output` mode for structured rows and stream-friendly pipelines
+
+### Prompt Context
+
+**User prompt (verbatim):** "ok this turned on scanning for sure. but the go version didn't... Also read `glaze help build-first-command` and initialize the help system properly and also make scan / pair commands dual mode with normal mode first, such that we can have a --wait and a more streaming output version of it all."
+
+**Assistant interpretation:** Make scanning verifiable from the Go CLI, initialize help-system integration correctly, and provide dual-mode scan/pair commands with timed waiting and structured output support.
+
+**Inferred user intent:** Improve practical operability and debugging confidence for pairing flows, while keeping CLI scriptability.
+
+**Commit (code):** N/A
+
+### What I did
+- Read and validated `glaze help build-first-command` content.
+- Initialized help system in root command:
+  - `help.NewHelpSystem()`
+  - `doc.AddDocToHelpSystem(...)`
+  - `help_cmd.SetupCobraRootCommand(...)`
+- Added dual-mode support helper for Cobra command builds:
+  - `BuildCobraDual` in `pkg/cmd/common/common.go`
+- Refactored `scan` group commands to dual mode:
+  - `start` / `stop`
+  - new `discover --wait N [--name-filter ...]`
+  - enhanced `pair` with `--wait` and optional auto-targeting from discovery
+- Added timed discovery service primitive:
+  - `Discover(ctx, seconds)` in `pkg/soundctl/bluetooth/service.go`
+- Improved pairing resilience:
+  - `Pair` treats `org.bluez.Error.AlreadyExists` as non-fatal and continues trust/connect flow
+- Improved diagnostics:
+  - command runner now preserves stdout error text when stderr is empty
+- Added parser support for scan output and tests:
+  - `ParseBluetoothScanOutput` in `pkg/soundctl/parse/bluetooth.go`
+  - updated parser/service tests
+
+### Why
+- A deterministic `--wait` scan primitive is necessary to verify that scanning actually finds target devices before pairing attempts.
+- Dual mode is needed for both human-first workflows and structured automation workflows.
+
+### What worked
+- `scan discover --wait 5` now shows discovered devices in normal mode.
+- `scan discover --wait 8 --with-glaze-output --output json` emits structured discovery rows + summary.
+- `scan pair --help` shows dual-mode and new `--wait`/`--name-filter` options.
+- Pair failure output is now descriptive (includes BlueZ failure detail).
+
+### What didn't work
+- Loading Glazed docs into the help system emits a debug-level parse warning from an upstream glazed tutorial file (`migrating-to-facade-packages.md`) when log level is debug. Help still works and `build-first-command` loads correctly.
+
+### What I learned
+- For Bluetooth in this environment, timed scan-and-collect is a more reliable primitive than trying to model persistent scanning as a stateless CLI toggle.
+
+### What was tricky to build
+- `bluetoothctl` emits mixed event lines (`[NEW]`, `[CHG]`, ANSI-colored output). Correct discovery output required filtering only true `[NEW] Device ...` events and excluding status-change noise.
+
+### What warrants a second pair of eyes
+- Decide whether help-system doc loading should be narrowed to a curated subset to avoid upstream debug-noise from unrelated doc files.
+
+### What should be done in the future
+- Add a dedicated long-running `scan watch` streaming command if continuous discovery events are needed beyond timed windows.
+
+### Code review instructions
+- Help integration:
+  - `pkg/cmd/root.go`
+- Dual-mode command plumbing:
+  - `pkg/cmd/common/common.go`
+  - `pkg/cmd/scan/commands.go`
+- Discovery/pair primitives:
+  - `pkg/soundctl/bluetooth/service.go`
+  - `pkg/soundctl/parse/bluetooth.go`
+  - `pkg/soundctl/exec/runner.go`
+- Re-run:
+  - `go run ./cmd/soundctl help build-first-command`
+  - `go run ./cmd/soundctl scan discover --wait 8`
+  - `go run ./cmd/soundctl scan discover --wait 8 --with-glaze-output --output json`
+  - `go run ./cmd/soundctl scan pair --addr 08:FF:44:2B:4C:90 --trust --connect --with-glaze-output --output json`
+
+### Technical details
+- Verified outputs now include:
+  - human-readable scan discovery summary in normal mode
+  - structured `kind=discovered` rows plus summary row in glaze mode
+  - detailed pair failure text instead of generic `exit status 1`

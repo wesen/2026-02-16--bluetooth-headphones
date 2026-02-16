@@ -15,6 +15,7 @@
 - [x] Phase 1.9: Run `go test ./...` and execute smoke commands (`--help`, representative read/write verbs)
 - [x] Phase 1.10: Finalize Phase 1 docs (usage examples, known limitations, next-step handoff to TUI phase)
 - [x] Phase 1.11: Improve Bluetooth visibility (`devices status` + mode/scanning fields in `devices list`)
+- [x] Phase 1.12: Add dual-mode scan/pair flow with `--wait` discovery primitive and initialize Glazed help system
 - [ ] Phase 2.1 (deferred): Build Bubble Tea shell consuming the same `pkg/` services
 - [ ] Phase 2.2 (deferred): Implement panes/overlay/keymap parity with spec
 - [ ] Phase 2.3 (deferred): Add live event subscriptions and TUI integration tests
