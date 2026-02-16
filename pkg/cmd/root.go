@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"soundctl/pkg/cmd/devices"
 	"soundctl/pkg/cmd/mute"
+	"soundctl/pkg/cmd/presets"
 	"soundctl/pkg/cmd/profiles"
 	"soundctl/pkg/cmd/scan"
 	"soundctl/pkg/cmd/sinks"
@@ -18,12 +19,14 @@ import (
 	"soundctl/pkg/cmd/volume"
 	"soundctl/pkg/soundctl/audio"
 	"soundctl/pkg/soundctl/bluetooth"
+	"soundctl/pkg/soundctl/preset"
 	"soundctl/pkg/tui"
 )
 
 type Dependencies struct {
-	Bluetooth bluetooth.Service
-	Audio     audio.Service
+	Bluetooth   bluetooth.Service
+	Audio       audio.Service
+	PresetStore *preset.Store
 }
 
 func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
@@ -53,6 +56,7 @@ func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
 		{Use: "profiles", Short: "Audio profile/card operations"},
 		{Use: "volume", Short: "Volume operations"},
 		{Use: "mute", Short: "Mute operations"},
+		{Use: "presets", Short: "Preset management (save/apply/snapshot)"},
 	}
 	for _, g := range groups {
 		rootCmd.AddCommand(g)
@@ -78,6 +82,9 @@ func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
 	}
 	if err := mute.Register(groups[6], deps.Audio); err != nil {
 		return nil, fmt.Errorf("register mute commands: %w", err)
+	}
+	if err := presets.Register(groups[7], deps.PresetStore, deps.Audio); err != nil {
+		return nil, fmt.Errorf("register presets commands: %w", err)
 	}
 
 	// TUI subcommand
