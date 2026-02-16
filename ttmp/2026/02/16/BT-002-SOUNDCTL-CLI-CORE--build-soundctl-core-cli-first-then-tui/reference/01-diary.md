@@ -284,7 +284,7 @@ After wiring commands, I ran full unit tests and live CLI smoke commands (help, 
 
 **Inferred user intent:** Reach a stable, testable Phase 1 completion before starting any TUI work.
 
-**Commit (code):** N/A
+**Commit (code):** `b7b0f48` — "phase1: add glazed CLI verbs and complete validation docs"
 
 ### What I did
 - Added CLI root and dependency wiring:
