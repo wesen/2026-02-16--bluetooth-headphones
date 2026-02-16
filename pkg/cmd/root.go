@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
 	"github.com/go-go-golems/glazed/pkg/doc"
 	"github.com/go-go-golems/glazed/pkg/help"
@@ -17,6 +18,7 @@ import (
 	"soundctl/pkg/cmd/volume"
 	"soundctl/pkg/soundctl/audio"
 	"soundctl/pkg/soundctl/bluetooth"
+	"soundctl/pkg/tui"
 )
 
 type Dependencies struct {
@@ -77,6 +79,19 @@ func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
 	if err := mute.Register(groups[6], deps.Audio); err != nil {
 		return nil, fmt.Errorf("register mute commands: %w", err)
 	}
+
+	// TUI subcommand
+	tuiCmd := &cobra.Command{
+		Use:   "tui",
+		Short: "Launch the interactive Bubble Tea TUI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			model := tui.NewAppModel(deps.Bluetooth, deps.Audio)
+			p := tea.NewProgram(model, tea.WithAltScreen())
+			_, err := p.Run()
+			return err
+		},
+	}
+	rootCmd.AddCommand(tuiCmd)
 
 	return rootCmd, nil
 }
