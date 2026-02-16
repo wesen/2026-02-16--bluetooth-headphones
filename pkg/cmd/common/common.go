@@ -28,3 +28,14 @@ func BuildCobra(command cmds.Command) (*cobra.Command, error) {
 		}),
 	)
 }
+
+func BuildCobraDual(command cmds.Command) (*cobra.Command, error) {
+	return cli.BuildCobraCommandFromCommand(command,
+		cli.WithDualMode(true),
+		cli.WithGlazeToggleFlag("with-glaze-output"),
+		cli.WithParserConfig(cli.CobraParserConfig{
+			ShortHelpSections: []string{schema.DefaultSlug},
+			MiddlewaresFunc:   cli.CobraCommandDefaultMiddlewares,
+		}),
+	)
+}

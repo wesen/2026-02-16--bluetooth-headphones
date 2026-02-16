@@ -27,6 +27,11 @@ type BluetoothControllerRecord struct {
 	Discovering bool
 }
 
+type BluetoothDiscoveredRecord struct {
+	Address string
+	Name    string
+}
+
 func ParseBluetoothDevices(output string) ([]BluetoothDeviceRecord, error) {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 1 && strings.TrimSpace(lines[0]) == "" {
@@ -133,4 +138,52 @@ func ParseBluetoothShow(output string) (BluetoothControllerRecord, error) {
 		return status, fmt.Errorf("missing controller address in show output")
 	}
 	return status, nil
+}
+
+func ParseBluetoothScanOutput(output string) ([]BluetoothDiscoveredRecord, error) {
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	found := map[string]BluetoothDiscoveredRecord{}
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+
+		// Strip optional ANSI color sequences emitted by bluetoothctl.
+		line = strings.ReplaceAll(line, "\u001b[0;92m", "")
+		line = strings.ReplaceAll(line, "\u001b[0;93m", "")
+		line = strings.ReplaceAll(line, "\u001b[0;91m", "")
+		line = strings.ReplaceAll(line, "\u001b[0m", "")
+
+		if !strings.Contains(line, "Device ") {
+			continue
+		}
+		// In scan output, keep only true discovery rows.
+		isNewEvent := strings.Contains(line, "[NEW] Device ")
+		isPlainDevice := strings.HasPrefix(line, "Device ")
+		if !isNewEvent && !isPlainDevice {
+			continue
+		}
+		idx := strings.Index(line, "Device ")
+		if idx < 0 {
+			continue
+		}
+		payload := strings.TrimSpace(line[idx+len("Device "):])
+		parts := strings.SplitN(payload, " ", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		address := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+		if address == "" || name == "" {
+			continue
+		}
+		found[address] = BluetoothDiscoveredRecord{Address: address, Name: name}
+	}
+
+	records := make([]BluetoothDiscoveredRecord, 0, len(found))
+	for _, record := range found {
+		records = append(records, record)
+	}
+	return records, nil
 }

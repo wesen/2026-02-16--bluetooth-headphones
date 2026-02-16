@@ -3,6 +3,8 @@ package bluetooth
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 
 	sexec "soundctl/pkg/soundctl/exec"
 	"soundctl/pkg/soundctl/parse"
@@ -34,10 +36,16 @@ type ControllerStatus struct {
 	Discovering bool
 }
 
+type DiscoveredDevice struct {
+	Address string
+	Name    string
+}
+
 type Service interface {
 	ListDevices(ctx context.Context) ([]Device, error)
 	ControllerStatus(ctx context.Context) (ControllerStatus, error)
 	Info(ctx context.Context, address string) (DeviceInfo, error)
+	Discover(ctx context.Context, seconds int) ([]DiscoveredDevice, error)
 	Connect(ctx context.Context, address string) error
 	Disconnect(ctx context.Context, address string) error
 	Trust(ctx context.Context, address string) error
@@ -139,11 +147,22 @@ func (s *ExecService) Remove(ctx context.Context, address string) error {
 }
 
 func (s *ExecService) Pair(ctx context.Context, address string) error {
-	return s.runOnAddress(ctx, "pair", address)
+	if address == "" {
+		return fmt.Errorf("address is required")
+	}
+	out, err := s.runner.Run(ctx, "bluetoothctl", "pair", address)
+	if err != nil {
+		// Already paired should not abort trust/connect flows.
+		if strings.Contains(err.Error(), "org.bluez.Error.AlreadyExists") || strings.Contains(out, "org.bluez.Error.AlreadyExists") {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func (s *ExecService) StartScan(ctx context.Context) error {
-	_, err := s.runner.Run(ctx, "bluetoothctl", "scan", "on")
+	_, err := s.Discover(ctx, 5)
 	return err
 }
 
@@ -158,6 +177,25 @@ func (s *ExecService) runOnAddress(ctx context.Context, operation string, addres
 	}
 	_, err := s.runner.Run(ctx, "bluetoothctl", operation, address)
 	return err
+}
+
+func (s *ExecService) Discover(ctx context.Context, seconds int) ([]DiscoveredDevice, error) {
+	if seconds <= 0 {
+		seconds = 8
+	}
+	out, err := s.runner.Run(ctx, "bluetoothctl", "--timeout", strconv.Itoa(seconds), "scan", "on")
+	if err != nil {
+		return nil, err
+	}
+	records, err := parse.ParseBluetoothScanOutput(out)
+	if err != nil {
+		return nil, err
+	}
+	devices := make([]DiscoveredDevice, 0, len(records))
+	for _, rec := range records {
+		devices = append(devices, DiscoveredDevice{Address: rec.Address, Name: rec.Name})
+	}
+	return devices, nil
 }
 
 func modeFromInfo(info DeviceInfo) string {

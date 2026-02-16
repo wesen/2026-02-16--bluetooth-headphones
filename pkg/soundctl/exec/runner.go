@@ -35,6 +35,10 @@ func (r *OSRunner) Run(ctx context.Context, name string, args ...string) (string
 		if errText != "" {
 			return out, fmt.Errorf("%w: %s", err, errText)
 		}
+		// Some CLIs (including bluetoothctl) print failures to stdout.
+		if out != "" {
+			return out, fmt.Errorf("%w: %s", err, out)
+		}
 		return out, err
 	}
 	return out, nil

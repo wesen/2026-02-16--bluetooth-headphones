@@ -73,3 +73,22 @@ func TestParseBluetoothShow(t *testing.T) {
 		t.Fatal("expected discovering=true")
 	}
 }
+
+func TestParseBluetoothScanOutput(t *testing.T) {
+	input := `SetDiscoveryFilter success
+Discovery started
+[CHG] Controller 10:A5:1D:00:C6:6F Discovering: yes
+[CHG] Device 79:7E:AE:0B:2B:0E RSSI: 0xffffffa8 (-88)
+[NEW] Device 90:62:3F:92:B1:A7 AirPods Max #3 - Find My`
+
+	found, err := ParseBluetoothScanOutput(input)
+	if err != nil {
+		t.Fatalf("ParseBluetoothScanOutput returned error: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("expected 1 discovered device, got %d", len(found))
+	}
+	if found[0].Address != "90:62:3F:92:B1:A7" {
+		t.Fatalf("unexpected discovered address: %s", found[0].Address)
+	}
+}

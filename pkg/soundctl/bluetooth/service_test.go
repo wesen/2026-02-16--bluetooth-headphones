@@ -2,6 +2,7 @@ package bluetooth
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	sexec "soundctl/pkg/soundctl/exec"
@@ -91,5 +92,37 @@ func TestControllerStatus(t *testing.T) {
 	}
 	if status.Pairable {
 		t.Fatal("expected pairable=false")
+	}
+}
+
+func TestPairAlreadyExistsIsNonFatal(t *testing.T) {
+	fake := sexec.NewFakeRunner()
+	fake.Set("bluetoothctl", []string{"pair", "08:FF:44:2B:4C:90"}, sexec.CommandResult{
+		Output: "Failed to pair: org.bluez.Error.AlreadyExists",
+		Err:    errors.New("exit status 1"),
+	})
+
+	svc := NewExecService(fake)
+	if err := svc.Pair(context.Background(), "08:FF:44:2B:4C:90"); err != nil {
+		t.Fatalf("Pair should ignore AlreadyExists, got error: %v", err)
+	}
+}
+
+func TestDiscoverParsesDevices(t *testing.T) {
+	fake := sexec.NewFakeRunner()
+	fake.Set("bluetoothctl", []string{"--timeout", "8", "scan", "on"}, sexec.CommandResult{
+		Output: "Discovery started\n[NEW] Device 90:62:3F:92:B1:A7 AirPods Max #3 - Find My",
+	})
+
+	svc := NewExecService(fake)
+	found, err := svc.Discover(context.Background(), 8)
+	if err != nil {
+		t.Fatalf("Discover failed: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("expected 1 discovered device, got %d", len(found))
+	}
+	if found[0].Address != "90:62:3F:92:B1:A7" {
+		t.Fatalf("unexpected discovered address: %s", found[0].Address)
 	}
 }

@@ -4,6 +4,9 @@ import (
 	"fmt"
 
 	"github.com/go-go-golems/glazed/pkg/cmds/logging"
+	"github.com/go-go-golems/glazed/pkg/doc"
+	"github.com/go-go-golems/glazed/pkg/help"
+	help_cmd "github.com/go-go-golems/glazed/pkg/help/cmd"
 	"github.com/spf13/cobra"
 	"soundctl/pkg/cmd/devices"
 	"soundctl/pkg/cmd/mute"
@@ -33,6 +36,12 @@ func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
 	if err := logging.AddLoggingSectionToRootCommand(rootCmd, "soundctl"); err != nil {
 		return nil, err
 	}
+
+	helpSystem := help.NewHelpSystem()
+	if err := doc.AddDocToHelpSystem(helpSystem); err != nil {
+		return nil, err
+	}
+	help_cmd.SetupCobraRootCommand(helpSystem, rootCmd)
 
 	groups := []*cobra.Command{
 		{Use: "devices", Short: "Bluetooth device operations"},
