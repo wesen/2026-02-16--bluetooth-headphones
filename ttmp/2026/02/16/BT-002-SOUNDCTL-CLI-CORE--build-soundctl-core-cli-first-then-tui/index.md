@@ -13,13 +13,17 @@ RelatedFiles:
     - Path: cmd/soundctl/main.go
       Note: Executable CLI binary entrypoint
     - Path: pkg/cmd/devices/commands.go
-      Note: Representative command wrapper implementation
+      Note: |-
+        Representative command wrapper implementation
+        Improved device visibility and status command
     - Path: pkg/cmd/root.go
       Note: CLI command tree wiring
     - Path: pkg/soundctl/audio/service.go
       Note: Core audio operations for CLI/TUI
     - Path: pkg/soundctl/bluetooth/service.go
-      Note: Core bluetooth operations for CLI/TUI
+      Note: |-
+        Core bluetooth operations for CLI/TUI
+        Aggregates show/info output into CLI-friendly status
     - Path: pkg/soundctl/exec/runner.go
       Note: Core runner abstraction used by all services
     - Path: pkg/soundctl/parse/bluetooth.go
@@ -38,6 +42,7 @@ LastUpdated: 2026-02-16T14:12:41.247973418-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

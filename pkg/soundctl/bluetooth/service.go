@@ -9,8 +9,12 @@ import (
 )
 
 type Device struct {
-	Address string
-	Name    string
+	Address    string
+	Name       string
+	Paired     bool
+	Trusted    bool
+	Connected  bool
+	Connection string
 }
 
 type DeviceInfo struct {
@@ -22,8 +26,17 @@ type DeviceInfo struct {
 	Connected bool
 }
 
+type ControllerStatus struct {
+	Address     string
+	Alias       string
+	Powered     bool
+	Pairable    bool
+	Discovering bool
+}
+
 type Service interface {
 	ListDevices(ctx context.Context) ([]Device, error)
+	ControllerStatus(ctx context.Context) (ControllerStatus, error)
 	Info(ctx context.Context, address string) (DeviceInfo, error)
 	Connect(ctx context.Context, address string) error
 	Disconnect(ctx context.Context, address string) error
@@ -53,9 +66,38 @@ func (s *ExecService) ListDevices(ctx context.Context) ([]Device, error) {
 	}
 	devices := make([]Device, 0, len(recs))
 	for _, rec := range recs {
-		devices = append(devices, Device{Address: rec.Address, Name: rec.Name})
+		info, err := s.Info(ctx, rec.Address)
+		if err != nil {
+			return nil, err
+		}
+		devices = append(devices, Device{
+			Address:    rec.Address,
+			Name:       rec.Name,
+			Paired:     info.Paired,
+			Trusted:    info.Trusted,
+			Connected:  info.Connected,
+			Connection: modeFromInfo(info),
+		})
 	}
 	return devices, nil
+}
+
+func (s *ExecService) ControllerStatus(ctx context.Context) (ControllerStatus, error) {
+	out, err := s.runner.Run(ctx, "bluetoothctl", "show")
+	if err != nil {
+		return ControllerStatus{}, err
+	}
+	rec, err := parse.ParseBluetoothShow(out)
+	if err != nil {
+		return ControllerStatus{}, err
+	}
+	return ControllerStatus{
+		Address:     rec.Address,
+		Alias:       rec.Alias,
+		Powered:     rec.Powered,
+		Pairable:    rec.Pairable,
+		Discovering: rec.Discovering,
+	}, nil
 }
 
 func (s *ExecService) Info(ctx context.Context, address string) (DeviceInfo, error) {
@@ -116,4 +158,14 @@ func (s *ExecService) runOnAddress(ctx context.Context, operation string, addres
 	}
 	_, err := s.runner.Run(ctx, "bluetoothctl", operation, address)
 	return err
+}
+
+func modeFromInfo(info DeviceInfo) string {
+	if info.Connected {
+		return "connected"
+	}
+	if info.Paired {
+		return "paired"
+	}
+	return "saved"
 }

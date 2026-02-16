@@ -19,6 +19,14 @@ type BluetoothInfoRecord struct {
 	Connected bool
 }
 
+type BluetoothControllerRecord struct {
+	Address     string
+	Alias       string
+	Powered     bool
+	Pairable    bool
+	Discovering bool
+}
+
 func ParseBluetoothDevices(output string) ([]BluetoothDeviceRecord, error) {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) == 1 && strings.TrimSpace(lines[0]) == "" {
@@ -87,4 +95,42 @@ func ParseBluetoothInfo(output string) (BluetoothInfoRecord, error) {
 		return info, fmt.Errorf("missing bluetooth device address in info output")
 	}
 	return info, nil
+}
+
+func ParseBluetoothShow(output string) (BluetoothControllerRecord, error) {
+	var status BluetoothControllerRecord
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	for i, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" {
+			continue
+		}
+		if i == 0 {
+			if !strings.HasPrefix(line, "Controller ") {
+				return status, fmt.Errorf("expected header line starting with Controller, got %q", line)
+			}
+			parts := strings.SplitN(line, " ", 3)
+			if len(parts) < 2 {
+				return status, fmt.Errorf("malformed bluetooth show header: %q", line)
+			}
+			status.Address = parts[1]
+			continue
+		}
+		if strings.HasPrefix(line, "Alias:") {
+			status.Alias = strings.TrimSpace(strings.TrimPrefix(line, "Alias:"))
+		}
+		if strings.HasPrefix(line, "Powered:") {
+			status.Powered = strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(line, "Powered:")), "yes")
+		}
+		if strings.HasPrefix(line, "Pairable:") {
+			status.Pairable = strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(line, "Pairable:")), "yes")
+		}
+		if strings.HasPrefix(line, "Discovering:") {
+			status.Discovering = strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(line, "Discovering:")), "yes")
+		}
+	}
+	if status.Address == "" {
+		return status, fmt.Errorf("missing controller address in show output")
+	}
+	return status, nil
 }

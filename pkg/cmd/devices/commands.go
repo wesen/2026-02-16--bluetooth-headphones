@@ -28,7 +28,7 @@ func newListCommand(svc bluetooth.Service) (*listCommand, error) {
 	return &listCommand{
 		CommandDescription: cmds.NewCommandDescription(
 			"list",
-			cmds.WithShort("List paired/known bluetooth devices"),
+			cmds.WithShort("List known bluetooth devices with mode/status"),
 			cmds.WithSections(sections...),
 		),
 		svc: svc,
@@ -36,16 +36,62 @@ func newListCommand(svc bluetooth.Service) (*listCommand, error) {
 }
 
 func (c *listCommand) RunIntoGlazeProcessor(ctx context.Context, _ *values.Values, gp middlewares.Processor) error {
+	controller, err := c.svc.ControllerStatus(ctx)
+	if err != nil {
+		return err
+	}
 	devices, err := c.svc.ListDevices(ctx)
 	if err != nil {
 		return err
 	}
 	for _, d := range devices {
-		if err := gp.AddRow(ctx, types.NewRow(types.MRP("address", d.Address), types.MRP("name", d.Name))); err != nil {
+		if err := gp.AddRow(ctx, types.NewRow(
+			types.MRP("address", d.Address),
+			types.MRP("name", d.Name),
+			types.MRP("mode", d.Connection),
+			types.MRP("paired", d.Paired),
+			types.MRP("trusted", d.Trusted),
+			types.MRP("connected", d.Connected),
+			types.MRP("scanning", controller.Discovering),
+		)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+type statusCommand struct {
+	*cmds.CommandDescription
+	svc bluetooth.Service
+}
+
+func newStatusCommand(svc bluetooth.Service) (*statusCommand, error) {
+	sections, err := common.DefaultSections()
+	if err != nil {
+		return nil, err
+	}
+	return &statusCommand{
+		CommandDescription: cmds.NewCommandDescription(
+			"status",
+			cmds.WithShort("Show bluetooth controller scan/power/pairable status"),
+			cmds.WithSections(sections...),
+		),
+		svc: svc,
+	}, nil
+}
+
+func (c *statusCommand) RunIntoGlazeProcessor(ctx context.Context, _ *values.Values, gp middlewares.Processor) error {
+	status, err := c.svc.ControllerStatus(ctx)
+	if err != nil {
+		return err
+	}
+	return gp.AddRow(ctx, types.NewRow(
+		types.MRP("address", status.Address),
+		types.MRP("alias", status.Alias),
+		types.MRP("powered", status.Powered),
+		types.MRP("pairable", status.Pairable),
+		types.MRP("scanning", status.Discovering),
+	))
 }
 
 type addrSettings struct {
@@ -95,6 +141,10 @@ func Register(parent *cobra.Command, svc bluetooth.Service) error {
 	if err != nil {
 		return err
 	}
+	statusCmd, err := newStatusCommand(svc)
+	if err != nil {
+		return err
+	}
 	connectCmd, err := newAddrCommand("connect", "Connect bluetooth device", "devices.connect", svc, func(ctx context.Context, s bluetooth.Service, addr string) error {
 		return s.Connect(ctx, addr)
 	})
@@ -119,7 +169,7 @@ func Register(parent *cobra.Command, svc bluetooth.Service) error {
 	if err != nil {
 		return err
 	}
-	commands = append(commands, listCmd, connectCmd, disconnectCmd, trustCmd, forgetCmd)
+	commands = append(commands, listCmd, statusCmd, connectCmd, disconnectCmd, trustCmd, forgetCmd)
 
 	for _, command := range commands {
 		cobraCmd, err := common.BuildCobra(command)

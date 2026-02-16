@@ -10,6 +10,12 @@ import (
 func TestListDevices(t *testing.T) {
 	fake := sexec.NewFakeRunner()
 	fake.Set("bluetoothctl", []string{"devices"}, sexec.CommandResult{Output: "Device 08:FF:44:2B:4C:90 AirPods Max"})
+	fake.Set("bluetoothctl", []string{"info", "08:FF:44:2B:4C:90"}, sexec.CommandResult{Output: `Device 08:FF:44:2B:4C:90 (public)
+	Name: AirPods Max
+	Alias: AirPods Max
+	Paired: yes
+	Trusted: yes
+	Connected: no`})
 
 	svc := NewExecService(fake)
 	devices, err := svc.ListDevices(context.Background())
@@ -21,6 +27,12 @@ func TestListDevices(t *testing.T) {
 	}
 	if devices[0].Address != "08:FF:44:2B:4C:90" {
 		t.Fatalf("unexpected address: %s", devices[0].Address)
+	}
+	if devices[0].Connection != "paired" {
+		t.Fatalf("unexpected connection mode: %s", devices[0].Connection)
+	}
+	if !devices[0].Trusted {
+		t.Fatal("expected trusted=true")
 	}
 }
 
@@ -58,5 +70,26 @@ func TestConnectRunsExpectedCommand(t *testing.T) {
 	calls := fake.Calls()
 	if len(calls) != 1 || calls[0] != "bluetoothctl connect AA:BB:CC:DD:EE:FF" {
 		t.Fatalf("unexpected calls: %#v", calls)
+	}
+}
+
+func TestControllerStatus(t *testing.T) {
+	fake := sexec.NewFakeRunner()
+	fake.Set("bluetoothctl", []string{"show"}, sexec.CommandResult{Output: `Controller 10:A5:1D:00:C6:6F (public)
+	Alias: f
+	Powered: yes
+	Pairable: no
+	Discovering: yes`})
+
+	svc := NewExecService(fake)
+	status, err := svc.ControllerStatus(context.Background())
+	if err != nil {
+		t.Fatalf("ControllerStatus failed: %v", err)
+	}
+	if !status.Discovering {
+		t.Fatal("expected discovering=true")
+	}
+	if status.Pairable {
+		t.Fatal("expected pairable=false")
 	}
 }

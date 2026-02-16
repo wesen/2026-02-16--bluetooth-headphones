@@ -15,7 +15,9 @@ RelatedFiles:
     - Path: pkg/cmd/common/common.go
       Note: Glazed section/parser helpers
     - Path: pkg/cmd/devices/commands.go
-      Note: Devices CLI verbs
+      Note: |-
+        Devices CLI verbs
+        devices status verb + richer list output
     - Path: pkg/cmd/mute/commands.go
       Note: Mute CLI verbs
     - Path: pkg/cmd/profiles/commands.go
@@ -35,29 +37,42 @@ RelatedFiles:
     - Path: pkg/soundctl/audio/service_test.go
       Note: Audio service tests with fake runner
     - Path: pkg/soundctl/bluetooth/service.go
-      Note: Bluetooth service API and command mapping
+      Note: |-
+        Bluetooth service API and command mapping
+        ControllerStatus + enriched ListDevices output
     - Path: pkg/soundctl/bluetooth/service_test.go
-      Note: Bluetooth service tests with fake runner
+      Note: |-
+        Bluetooth service tests with fake runner
+        Service behavior tests for mode/scanning
     - Path: pkg/soundctl/exec/runner.go
       Note: Command runner abstraction and fake test double
     - Path: pkg/soundctl/parse/bluetooth.go
-      Note: Bluetooth output parser
+      Note: |-
+        Bluetooth output parser
+        Controller status parser from bluetoothctl show
     - Path: pkg/soundctl/parse/bluetooth_test.go
-      Note: Parser behavior tests
+      Note: |-
+        Parser behavior tests
+        Controller parser tests
     - Path: pkg/soundctl/parse/pactl.go
       Note: Pactl short output parser
     - Path: pkg/soundctl/parse/pactl_test.go
       Note: Parser behavior tests
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/index.md
       Note: Ticket navigation and status context
+    - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/playbook/01-phase-1-cli-smoke-checks-and-usage.md
+      Note: Updated usage for status and mode fields
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/tasks.md
-      Note: Task-by-task execution plan tracked in diary
+      Note: |-
+        Task-by-task execution plan tracked in diary
+        Track Phase 1.11 completion
 ExternalSources: []
 Summary: ""
 LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -353,3 +368,73 @@ After wiring commands, I ran full unit tests and live CLI smoke commands (help, 
   - `devices list --output json` returned known paired device rows
   - `sinks list --output json` returned current sink rows
   - invalid `volume set` target returned `invalid target \"invalid\": expected sink or source`
+
+## Step 5: Improve Bluetooth status visibility in CLI output
+
+After using the new CLI, a gap was identified: `devices list` did not expose controller scan state or clear device mode information. I implemented a focused enhancement so scanning and mode are visible directly from CLI output.
+
+The update adds a dedicated `devices status` command (controller-level state) and enriches `devices list` with per-device state fields.
+
+### Prompt Context
+
+**User prompt (verbatim):** "device slist doesn't show me if they're scanning and which mode they are in..."
+
+**Assistant interpretation:** Extend the CLI to make scan state and device mode explicit, without requiring manual `bluetoothctl` inspection.
+
+**Inferred user intent:** Get immediate, scriptable visibility into whether scanning is active and whether each device is connected/paired/saved.
+
+**Commit (code):** N/A
+
+### What I did
+- Added parser support for `bluetoothctl show`:
+  - `ParseBluetoothShow` in `pkg/soundctl/parse/bluetooth.go`
+- Added controller status support in Bluetooth service:
+  - `ControllerStatus(ctx)` in `pkg/soundctl/bluetooth/service.go`
+- Enriched `ListDevices` response to include:
+  - `paired`, `trusted`, `connected`, `mode`
+- Updated devices CLI:
+  - `devices list` now outputs mode and scan state fields
+  - new `devices status` command outputs `powered`, `pairable`, `scanning`
+- Added/updated tests:
+  - parser test for `ParseBluetoothShow`
+  - service tests for enriched list behavior and controller status
+- Ran full tests and live smoke commands.
+
+### Why
+- The CLI should be sufficient for operational visibility; users should not need to drop into `bluetoothctl` for basic status checks.
+
+### What worked
+- `devices status --output json` now reports controller scan state directly.
+- `devices list --output json` now includes mode and boolean status flags.
+- Tests pass after changes.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Combining controller-level and device-level data in list output is useful, but an explicit `devices status` verb is still needed for no-device scenarios.
+
+### What was tricky to build
+- `bluetoothctl` splits state across separate commands (`show`, `devices`, `info`). Surfacing a single useful CLI output required composing these calls in the service layer without leaking parsing details into command wrappers.
+
+### What warrants a second pair of eyes
+- Confirm if `mode` classification should introduce additional states in future (for example `trusted-only`).
+
+### What should be done in the future
+- If desired, add an optional `--include-controller` switch to `devices list` to emit a dedicated controller row in single-stream output.
+
+### Code review instructions
+- Review parser/service changes:
+  - `pkg/soundctl/parse/bluetooth.go`
+  - `pkg/soundctl/bluetooth/service.go`
+- Review CLI changes:
+  - `pkg/cmd/devices/commands.go`
+- Re-run:
+  - `go test ./...`
+  - `go run ./cmd/soundctl devices status --output json`
+  - `go run ./cmd/soundctl devices list --output json`
+
+### Technical details
+- Live verification showed:
+  - `devices status` now returns `powered/pairable/scanning`
+  - `devices list` now returns `mode/paired/trusted/connected/scanning`

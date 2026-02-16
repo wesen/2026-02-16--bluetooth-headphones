@@ -48,3 +48,28 @@ func TestParseBluetoothInfo(t *testing.T) {
 		t.Fatal("expected connected=true")
 	}
 }
+
+func TestParseBluetoothShow(t *testing.T) {
+	input := `Controller 10:A5:1D:00:C6:6F (public)
+	Alias: f
+	Powered: yes
+	Pairable: no
+	Discovering: yes`
+
+	status, err := ParseBluetoothShow(input)
+	if err != nil {
+		t.Fatalf("ParseBluetoothShow returned error: %v", err)
+	}
+	if status.Address != "10:A5:1D:00:C6:6F" {
+		t.Fatalf("unexpected address: %s", status.Address)
+	}
+	if !status.Powered {
+		t.Fatal("expected powered=true")
+	}
+	if status.Pairable {
+		t.Fatal("expected pairable=false")
+	}
+	if !status.Discovering {
+		t.Fatal("expected discovering=true")
+	}
+}

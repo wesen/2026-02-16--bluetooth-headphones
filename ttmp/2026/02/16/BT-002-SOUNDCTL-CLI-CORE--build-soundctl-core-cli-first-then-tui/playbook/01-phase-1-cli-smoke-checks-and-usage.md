@@ -48,11 +48,18 @@ go run ./cmd/soundctl sinks --help
 ### 3) Read-path smoke commands
 
 ```bash
+go run ./cmd/soundctl devices status --output json
 go run ./cmd/soundctl devices list --output json
 go run ./cmd/soundctl sinks list --output json
 go run ./cmd/soundctl sources list --output json
 go run ./cmd/soundctl profiles list --output json
 ```
+
+`devices status` returns controller-wide fields (`powered`, `pairable`, `scanning`).
+`devices list` now includes per-device flags and mode:
+- `mode` (`connected`, `paired`, `saved`)
+- `paired`, `trusted`, `connected`
+- `scanning` (current controller scan state)
 
 ### 4) Mutation-path smoke commands (safe validation path)
 

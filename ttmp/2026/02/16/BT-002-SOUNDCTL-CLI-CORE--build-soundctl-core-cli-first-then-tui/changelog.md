@@ -47,3 +47,14 @@ Step 4: Implemented full Glazed CLI command tree over pkg services, passed tests
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/playbook/01-phase-1-cli-smoke-checks-and-usage.md — Smoke checks and known limitations
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/reference/01-diary.md — Detailed implementation narrative
 
+
+## 2026-02-16
+
+Step 5: Added bluetooth visibility improvements with devices status and mode/scanning fields in devices list.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/cmd/devices/commands.go — Command output enhancements
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/bluetooth/service.go — Controller and per-device state composition
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/reference/01-diary.md — Implementation and test narrative
+
