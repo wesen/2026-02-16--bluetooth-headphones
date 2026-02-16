@@ -40,12 +40,14 @@ RelatedFiles:
       Note: Implementation chronology
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/tasks.md
       Note: Detailed phased task list
-ExternalSources: []
+ExternalSources:
+    - local:headphones-presets.md
 Summary: ""
-LastUpdated: 2026-02-16T14:12:41.247973418-05:00
+LastUpdated: 2026-02-16T15:10:56.511639294-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
