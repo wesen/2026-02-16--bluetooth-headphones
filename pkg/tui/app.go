@@ -10,9 +10,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"soundctl/pkg/soundctl/audio"
 	"soundctl/pkg/soundctl/bluetooth"
+	"soundctl/pkg/soundctl/preset"
 )
 
-var tabNames = []string{"Devices", "Sinks", "Profiles"}
+var tabNames = []string{"Devices", "Sinks", "Profiles", "Presets"}
 
 // AppModel is the root Bubble Tea model. It owns the tab bar, child panes,
 // scanner overlay, and status bar — rendering the outer window chrome that
@@ -26,6 +27,7 @@ type AppModel struct {
 	devices  DevicesPane
 	sinks    SinksPane
 	profiles ProfilesPane
+	presets  PresetsPane
 	scanner  ScanOverlay
 
 	statusText string
@@ -45,12 +47,13 @@ type AppModel struct {
 }
 
 // NewAppModel creates the root app with service dependencies.
-func NewAppModel(bt bluetooth.Service, au audio.Service) AppModel {
+func NewAppModel(bt bluetooth.Service, au audio.Service, store *preset.Store) AppModel {
 	keys := DefaultKeyMap()
 	return AppModel{
 		devices:  NewDevicesPane(bt, keys),
 		sinks:    NewSinksPane(au, keys),
 		profiles: NewProfilesPane(au, keys),
+		presets:  NewPresetsPane(store, au, keys),
 		scanner:  NewScanOverlay(bt, keys),
 		keys:     keys,
 		bt:       bt,
@@ -68,6 +71,7 @@ func (m AppModel) Init() tea.Cmd {
 		m.devices.Init(),
 		m.sinks.Init(),
 		m.profiles.Init(),
+		m.presets.Init(),
 		m.paSub.WaitCmd(),
 		m.btSub.WaitCmd(),
 	)
@@ -138,6 +142,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.profiles, cmd = m.profiles.Update(msg)
 			cmds = append(cmds, cmd)
+		case TabPresets:
+			var cmd tea.Cmd
+			m.presets, cmd = m.presets.Update(msg)
+			cmds = append(cmds, cmd)
 		}
 		return m, tea.Batch(cmds...)
 	}
@@ -163,6 +171,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProfilesLoadedMsg, SetProfileResultMsg:
 		var cmd tea.Cmd
 		m.profiles, cmd = m.profiles.Update(msg)
+		cmds = append(cmds, cmd)
+	case PresetsLoadedMsg, ApplyPresetResultMsg, DeletePresetResultMsg, SavePresetResultMsg, OpenConfirmMsg, CloseConfirmMsg:
+		var cmd tea.Cmd
+		m.presets, cmd = m.presets.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -223,6 +235,7 @@ func (m AppModel) resizePanes() AppModel {
 	m.devices = m.devices.SetSize(contentW, contentH)
 	m.sinks = m.sinks.SetSize(contentW, contentH)
 	m.profiles = m.profiles.SetSize(contentW, contentH)
+	m.presets = m.presets.SetSize(contentW, contentH)
 	m.scanner = m.scanner.SetSize(contentW/2-2, contentH)
 	return m
 }
@@ -309,6 +322,8 @@ func (m AppModel) activePaneView() string {
 		return m.sinks.View()
 	case TabProfiles:
 		return m.profiles.View()
+	case TabPresets:
+		return m.presets.View()
 	default:
 		return ""
 	}
@@ -326,6 +341,8 @@ func (m AppModel) buildHelp() string {
 		parts = append(parts, "↑↓ navigate", "d set-default", "m mute")
 	case TabProfiles:
 		parts = append(parts, "↑↓ navigate", "enter apply")
+	case TabPresets:
+		parts = append(parts, "↑↓ navigate", "enter apply", "S snapshot", "X delete")
 	}
 	return strings.Join(parts, "  ")
 }

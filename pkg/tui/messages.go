@@ -10,6 +10,7 @@ const (
 	TabDevices  = 0
 	TabSinks    = 1
 	TabProfiles = 2
+	TabPresets  = 3
 )
 
 // TabChangedMsg requests the root model switch tabs.

@@ -92,7 +92,7 @@ func NewRootCommand(deps Dependencies) (*cobra.Command, error) {
 		Use:   "tui",
 		Short: "Launch the interactive Bubble Tea TUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			model := tui.NewAppModel(deps.Bluetooth, deps.Audio)
+			model := tui.NewAppModel(deps.Bluetooth, deps.Audio, deps.PresetStore)
 			p := tea.NewProgram(model, tea.WithAltScreen())
 			_, err := p.Run()
 			return err

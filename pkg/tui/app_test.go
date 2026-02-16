@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -9,9 +11,15 @@ import (
 	"soundctl/pkg/soundctl/audio"
 	"soundctl/pkg/soundctl/bluetooth"
 	"soundctl/pkg/soundctl/exec"
+	"soundctl/pkg/soundctl/preset"
 )
 
 func newTestApp() (AppModel, *exec.FakeRunner) {
+	dir, _ := os.MkdirTemp("", "soundctl-test-*")
+	return newTestAppWithDir(dir)
+}
+
+func newTestAppWithDir(tmpDir string) (AppModel, *exec.FakeRunner) {
 	runner := exec.NewFakeRunner()
 
 	// Stub controller status
@@ -54,8 +62,9 @@ func newTestApp() (AppModel, *exec.FakeRunner) {
 
 	bt := bluetooth.NewExecService(runner)
 	au := audio.NewExecService(runner)
+	store := preset.NewStore(filepath.Join(tmpDir, "presets.yaml"))
 
-	model := NewAppModel(bt, au)
+	model := NewAppModel(bt, au, store)
 	return model, runner
 }
 
@@ -92,6 +101,13 @@ func TestAppTabSwitch(t *testing.T) {
 		t.Fatalf("expected tab Profiles after second tab press, got %d", model.activeTab)
 	}
 
+	// Press tab → Presets
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+	if model.activeTab != TabPresets {
+		t.Fatalf("expected tab Presets after third tab press, got %d", model.activeTab)
+	}
+
 	// Wrap around → Devices
 	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
 	model = m.(AppModel)
@@ -105,11 +121,11 @@ func TestAppShiftTabReverse(t *testing.T) {
 	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	model = m.(AppModel)
 
-	// Shift-tab from Devices → Profiles (wrap backward)
+	// Shift-tab from Devices → Presets (wrap backward to last tab)
 	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 	model = m.(AppModel)
-	if model.activeTab != TabProfiles {
-		t.Fatalf("expected Profiles after shift-tab, got %d", model.activeTab)
+	if model.activeTab != TabPresets {
+		t.Fatalf("expected Presets after shift-tab, got %d", model.activeTab)
 	}
 }
 
@@ -640,6 +656,123 @@ func TestIntegrationFullDataFlow(t *testing.T) {
 	model = m.(AppModel)
 	if model.scanner.visible {
 		t.Fatal("expected scanner hidden after close")
+	}
+}
+
+func TestPresetsTabView(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	model = m.(AppModel)
+
+	// Switch to Presets tab
+	for i := 0; i < 3; i++ {
+		m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+		model = m.(AppModel)
+	}
+	if model.activeTab != TabPresets {
+		t.Fatalf("expected Presets tab, got %d", model.activeTab)
+	}
+
+	// Load presets
+	m, _ = model.Update(PresetsLoadedMsg{
+		Presets: []preset.Preset{
+			{Name: "Music Mode", DefaultSink: "bt-sink", CardProfiles: map[string]string{"sony": "a2dp"}},
+			{Name: "Video Call", DefaultSink: "bt-sink"},
+		},
+	})
+	model = m.(AppModel)
+
+	view := model.View()
+	for _, want := range []string{"Saved Presets", "Music Mode", "Video Call"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("presets view missing %q", want)
+		}
+	}
+}
+
+func TestPresetsApplyConfirmFlow(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	model = m.(AppModel)
+
+	// Switch to Presets tab
+	for i := 0; i < 3; i++ {
+		m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+		model = m.(AppModel)
+	}
+
+	// Load presets
+	m, _ = model.Update(PresetsLoadedMsg{
+		Presets: []preset.Preset{
+			{Name: "Test Preset", DefaultSink: "sink"},
+		},
+	})
+	model = m.(AppModel)
+
+	// Press enter to open confirm
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	model = m.(AppModel)
+
+	// The confirm msg should be routed
+	m, _ = model.Update(OpenConfirmMsg{
+		Preset: preset.Preset{Name: "Test Preset", DefaultSink: "sink"},
+		Diffs:  []preset.DiffLine{{Field: "Default sink", From: "", To: "sink"}},
+	})
+	model = m.(AppModel)
+
+	if !model.presets.confirmVisible {
+		t.Fatal("expected confirm overlay visible")
+	}
+
+	view := model.View()
+	if !strings.Contains(view, "Apply") {
+		t.Error("confirm view missing 'Apply'")
+	}
+	if !strings.Contains(view, "Cancel") {
+		t.Error("confirm view missing 'Cancel'")
+	}
+
+	// Press esc to close
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	model = m.(AppModel)
+	if model.presets.confirmVisible {
+		t.Fatal("expected confirm overlay closed after esc")
+	}
+}
+
+func TestPresetsActiveMarker(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	model = m.(AppModel)
+
+	// Switch to Presets tab
+	for i := 0; i < 3; i++ {
+		m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+		model = m.(AppModel)
+	}
+
+	// Load + mark active
+	m, _ = model.Update(PresetsLoadedMsg{
+		Presets: []preset.Preset{
+			{Name: "Active One"},
+			{Name: "Other"},
+		},
+	})
+	model = m.(AppModel)
+
+	m, _ = model.Update(ApplyPresetResultMsg{
+		Name:   "Active One",
+		Result: preset.ApplyResult{Applied: []string{"test"}},
+	})
+	model = m.(AppModel)
+
+	if model.presets.activePreset != "Active One" {
+		t.Fatalf("expected activePreset='Active One', got %q", model.presets.activePreset)
+	}
+
+	view := model.View()
+	if !strings.Contains(view, "[active]") {
+		t.Error("view missing [active] badge")
 	}
 }
 
