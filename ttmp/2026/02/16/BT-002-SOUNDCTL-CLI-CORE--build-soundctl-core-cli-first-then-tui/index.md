@@ -10,6 +10,12 @@ DocType: index
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: cmd/soundctl/main.go
+      Note: Executable CLI binary entrypoint
+    - Path: pkg/cmd/devices/commands.go
+      Note: Representative command wrapper implementation
+    - Path: pkg/cmd/root.go
+      Note: CLI command tree wiring
     - Path: pkg/soundctl/audio/service.go
       Note: Core audio operations for CLI/TUI
     - Path: pkg/soundctl/bluetooth/service.go
@@ -36,12 +42,13 @@ WhenToUse: ""
 
 
 
+
 # Build SoundCtl core + CLI first, then TUI
 
 ## Overview
 
 This ticket implements SoundCtl in two phases.
-Current focus is **Phase 1**: a testable `pkg/` core with Glazed CLI wrappers.
+Current status: **Phase 1 complete** with a testable `pkg/` core and Glazed CLI wrappers.
 **Phase 2** (Bubble Tea TUI) is intentionally deferred until core functionality and tests are stable.
 
 ## Key Links
@@ -49,6 +56,7 @@ Current focus is **Phase 1**: a testable `pkg/` core with Glazed CLI wrappers.
 - [Tasks](./tasks.md)
 - [Diary](./reference/01-diary.md)
 - [Two-Phase Build Plan: CLI Core First, TUI Second](./design-doc/01-two-phase-build-plan-cli-core-first-tui-second.md)
+- [Phase 1 CLI Smoke Checks and Usage](./playbook/01-phase-1-cli-smoke-checks-and-usage.md)
 - [Changelog](./changelog.md)
 
 ## Status

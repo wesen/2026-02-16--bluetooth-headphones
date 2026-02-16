@@ -10,6 +10,26 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: cmd/soundctl/main.go
+      Note: CLI entrypoint and dependency wiring
+    - Path: pkg/cmd/common/common.go
+      Note: Glazed section/parser helpers
+    - Path: pkg/cmd/devices/commands.go
+      Note: Devices CLI verbs
+    - Path: pkg/cmd/mute/commands.go
+      Note: Mute CLI verbs
+    - Path: pkg/cmd/profiles/commands.go
+      Note: Profiles CLI verbs
+    - Path: pkg/cmd/root.go
+      Note: Root command and group registration
+    - Path: pkg/cmd/scan/commands.go
+      Note: Scan CLI verbs
+    - Path: pkg/cmd/sinks/commands.go
+      Note: Sinks CLI verbs
+    - Path: pkg/cmd/sources/commands.go
+      Note: Sources CLI verbs
+    - Path: pkg/cmd/volume/commands.go
+      Note: Volume CLI verbs
     - Path: pkg/soundctl/audio/service.go
       Note: Audio service API and validation
     - Path: pkg/soundctl/audio/service_test.go
@@ -38,6 +58,7 @@ LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -197,7 +218,7 @@ I validated service behavior through unit tests using the fake runner, ensuring 
 
 **Inferred user intent:** Establish a stable, reusable backend surface before command/TUI layers.
 
-**Commit (code):** N/A
+**Commit (code):** `70198d7` — "phase1: add bluetooth and audio core services with tests"
 
 ### What I did
 - Added Bluetooth service:
@@ -248,3 +269,87 @@ I validated service behavior through unit tests using the fake runner, ensuring 
 - Commands used:
   - `gofmt -w pkg/soundctl/bluetooth/service.go pkg/soundctl/bluetooth/service_test.go pkg/soundctl/audio/service.go pkg/soundctl/audio/service_test.go`
   - `go test ./...`
+
+## Step 4: Build Glazed CLI command tree and complete Phase 1 test/smoke/documentation pass
+
+I implemented the SoundCtl CLI root command and all planned group/verb wrappers, keeping business logic inside `pkg/soundctl/*` services only. This preserves the intended architecture where CLI is orchestration and output formatting, while core functionality remains reusable for the future TUI.
+
+After wiring commands, I ran full unit tests and live CLI smoke commands (help, read-path commands, and a validation-failure mutation path). I also added a Phase 1 playbook documenting exact validation commands and known boundaries.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Finish the CLI-first phase task-by-task, with tested command wrappers around core services and detailed documentation.
+
+**Inferred user intent:** Reach a stable, testable Phase 1 completion before starting any TUI work.
+
+**Commit (code):** N/A
+
+### What I did
+- Added CLI root and dependency wiring:
+  - `cmd/soundctl/main.go`
+  - `pkg/cmd/root.go`
+  - `pkg/cmd/common/common.go`
+- Implemented command groups with Glazed wrappers:
+  - `pkg/cmd/devices/commands.go`
+  - `pkg/cmd/scan/commands.go`
+  - `pkg/cmd/sinks/commands.go`
+  - `pkg/cmd/sources/commands.go`
+  - `pkg/cmd/profiles/commands.go`
+  - `pkg/cmd/volume/commands.go`
+  - `pkg/cmd/mute/commands.go`
+- Pulled module dependencies via `go mod tidy`.
+- Executed tests and smoke checks:
+  - `go test ./...`
+  - `go run ./cmd/soundctl --help`
+  - `go run ./cmd/soundctl devices list --output json`
+  - `go run ./cmd/soundctl sinks list --output json`
+  - `go run ./cmd/soundctl volume set --target invalid --name foo --percent 10 --output json` (expected failure path)
+- Added Phase 1 usage/smoke playbook:
+  - `playbook/01-phase-1-cli-smoke-checks-and-usage.md`
+
+### Why
+- Completing all Phase 1 CLI tasks now gives a concrete platform for validating core behavior and unblocks TUI implementation later without backend churn.
+
+### What worked
+- Command groups/verbs compile and run.
+- Help output and structured read commands return expected data.
+- Validation error path returns clear non-zero result.
+- Full test suite passes after CLI integration.
+
+### What didn't work
+- One `go mod tidy` tool session appeared to hang without output in the terminal wrapper; rerunning `go mod tidy` completed successfully.
+
+### What I learned
+- Glazed command wrappers are straightforward when each command is mapped to one service call + a small typed settings struct.
+
+### What was tricky to build
+- Avoiding logic leakage into CLI wrappers required discipline: it is tempting to add parsing/validation in command files. The chosen implementation keeps CLI-level validation minimal and pushes operational logic to services.
+
+### What warrants a second pair of eyes
+- Validate command UX naming/semantics (especially `profiles list` currently based on `pactl list short cards` output) before freezing external interface.
+
+### What should be done in the future
+- Start Phase 2 by creating Bubble Tea shell models that call the same `pkg/soundctl/*` services.
+
+### Code review instructions
+- Start with command wiring:
+  - `pkg/cmd/root.go`
+  - `cmd/soundctl/main.go`
+- Review one representative command per group:
+  - `pkg/cmd/devices/commands.go`
+  - `pkg/cmd/sinks/commands.go`
+  - `pkg/cmd/profiles/commands.go`
+- Confirm CLI wrappers call services only:
+  - `pkg/soundctl/bluetooth/service.go`
+  - `pkg/soundctl/audio/service.go`
+- Re-run:
+  - `go test ./...`
+  - `go run ./cmd/soundctl --help`
+
+### Technical details
+- Smoke output evidence captured:
+  - `devices list --output json` returned known paired device rows
+  - `sinks list --output json` returned current sink rows
+  - invalid `volume set` target returned `invalid target \"invalid\": expected sink or source`
