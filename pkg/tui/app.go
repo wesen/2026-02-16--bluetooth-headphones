@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -30,6 +31,17 @@ type AppModel struct {
 	statusText string
 	isError    bool
 	keys       KeyMap
+
+	// Live subscriptions (nil until Init runs).
+	paSub *PulseAudioSubscription
+	btSub *BluetoothSubscription
+
+	// Service refs for refresh commands.
+	bt bluetooth.Service
+	au audio.Service
+
+	// Debounce: true when a refresh is already pending.
+	refreshPending bool
 }
 
 // NewAppModel creates the root app with service dependencies.
@@ -41,14 +53,23 @@ func NewAppModel(bt bluetooth.Service, au audio.Service) AppModel {
 		profiles: NewProfilesPane(au, keys),
 		scanner:  NewScanOverlay(bt, keys),
 		keys:     keys,
+		bt:       bt,
+		au:       au,
 	}
 }
 
 func (m AppModel) Init() tea.Cmd {
+	// Start live subscriptions.
+	ctx := context.Background()
+	m.paSub = NewPulseAudioSubscription(ctx)
+	m.btSub = NewBluetoothSubscription(ctx)
+
 	return tea.Batch(
 		m.devices.Init(),
 		m.sinks.Init(),
 		m.profiles.Init(),
+		m.paSub.WaitCmd(),
+		m.btSub.WaitCmd(),
 	)
 }
 
@@ -150,6 +171,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.scanner, cmd = m.scanner.Update(msg)
 		cmds = append(cmds, cmd)
+	}
+
+	// ── Live subscription events ──
+	switch msg.(type) {
+	case PulseAudioEventMsg:
+		// Re-subscribe for next event.
+		if m.paSub != nil {
+			cmds = append(cmds, m.paSub.WaitCmd())
+		}
+		// Debounce: schedule a refresh if one isn't already pending.
+		if !m.refreshPending {
+			m.refreshPending = true
+			cmds = append(cmds, debounceRefreshCmd())
+		}
+
+	case BluetoothEventMsg:
+		// Re-subscribe for next event.
+		if m.btSub != nil {
+			cmds = append(cmds, m.btSub.WaitCmd())
+		}
+		if !m.refreshPending {
+			m.refreshPending = true
+			cmds = append(cmds, debounceRefreshCmd())
+		}
+
+	case RefreshTickMsg:
+		// Debounce timer fired — reload all data.
+		m.refreshPending = false
+		cmds = append(cmds,
+			loadDevicesCmd(m.bt),
+			loadSinksCmd(m.au),
+			loadProfilesCmd(m.au),
+		)
 	}
 
 	return m, tea.Batch(cmds...)

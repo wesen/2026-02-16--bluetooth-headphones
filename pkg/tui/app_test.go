@@ -433,6 +433,216 @@ func TestProfilesApplyViaEnter(t *testing.T) {
 	}
 }
 
+func TestPulseAudioEventTriggersRefresh(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// Simulate a PulseAudio event
+	m, cmd := model.Update(PulseAudioEventMsg{EventType: "change", Facility: "sink"})
+	model = m.(AppModel)
+
+	if !model.refreshPending {
+		t.Fatal("expected refreshPending=true after PA event")
+	}
+	if cmd == nil {
+		t.Fatal("expected debounce command from PA event")
+	}
+}
+
+func TestBluetoothEventTriggersRefresh(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// Simulate a Bluetooth event
+	m, cmd := model.Update(BluetoothEventMsg{EventType: "property-changed", Detail: "test"})
+	model = m.(AppModel)
+
+	if !model.refreshPending {
+		t.Fatal("expected refreshPending=true after BT event")
+	}
+	if cmd == nil {
+		t.Fatal("expected debounce command from BT event")
+	}
+}
+
+func TestRefreshTickResetsAndReloads(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// Set pending
+	model.refreshPending = true
+
+	// Fire refresh tick
+	m, cmd := model.Update(RefreshTickMsg{})
+	model = m.(AppModel)
+
+	if model.refreshPending {
+		t.Fatal("expected refreshPending=false after RefreshTickMsg")
+	}
+	if cmd == nil {
+		t.Fatal("expected reload commands from RefreshTickMsg")
+	}
+}
+
+func TestDebouncePreventsDoubleRefresh(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// First event sets pending
+	m, _ = model.Update(PulseAudioEventMsg{EventType: "change", Facility: "sink"})
+	model = m.(AppModel)
+	if !model.refreshPending {
+		t.Fatal("expected pending after first event")
+	}
+
+	// Second event should not schedule another debounce
+	m, _ = model.Update(PulseAudioEventMsg{EventType: "change", Facility: "source"})
+	model = m.(AppModel)
+	// Still pending — only one debounce timer should be active
+	if !model.refreshPending {
+		t.Fatal("expected pending still true")
+	}
+}
+
+func TestIntegrationFullDataFlow(t *testing.T) {
+	// Integration test: load data for all panes, navigate, verify views
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	model = m.(AppModel)
+
+	// Load all data
+	m, _ = model.Update(DevicesLoadedMsg{
+		Devices: []bluetooth.Device{
+			{Address: "01:02:03:04:05:06", Name: "Sony WH-1000XM5", Connected: true, Connection: "connected"},
+			{Address: "07:08:09:0A:0B:0C", Name: "AirPods Pro", Paired: true, Connection: "paired"},
+			{Address: "0D:0E:0F:10:11:12", Name: "JBL Flip 6", Connection: "saved"},
+		},
+		Controller: bluetooth.ControllerStatus{Alias: "hci0", Powered: true, Discovering: false},
+	})
+	model = m.(AppModel)
+
+	m, _ = model.Update(SinksLoadedMsg{
+		Sinks: []audio.ShortRecord{
+			{ID: 47, Name: "bluez_sink.sony", State: "RUNNING"},
+			{ID: 48, Name: "alsa_output.stereo", State: "SUSPENDED"},
+		},
+		Sources: []audio.ShortRecord{
+			{ID: 49, Name: "bluez_source.sony", State: "RUNNING"},
+		},
+		SinkInputs: []audio.SinkInput{
+			{Index: 57, SinkIndex: 47, AppName: "Firefox", SinkName: "bluez_sink.sony"},
+			{Index: 63, SinkIndex: 47, AppName: "Spotify", SinkName: "bluez_sink.sony"},
+		},
+		DefaultSinkName:   "bluez_sink.sony",
+		DefaultSourceName: "bluez_source.sony",
+	})
+	model = m.(AppModel)
+
+	m, _ = model.Update(ProfilesLoadedMsg{
+		Cards: []audio.Card{
+			{
+				Index: 62, Name: "bluez_card.sony", Driver: "bluez5",
+				ActiveProfile: "a2dp-sink",
+				Profiles: []audio.CardProfile{
+					{Name: "a2dp-sink", Description: "High Fidelity Playback (A2DP Sink)", Available: true},
+					{Name: "headset-head-unit", Description: "Headset Head Unit (HSP/HFP)", Available: true},
+					{Name: "off", Description: "Off", Available: true},
+				},
+			},
+			{
+				Index: 47, Name: "alsa_card.pci-0000_00_1f", Driver: "alsa",
+				ActiveProfile: "output:analog-stereo+input:analog-stereo",
+				Profiles: []audio.CardProfile{
+					{Name: "output:analog-stereo+input:analog-stereo", Description: "Analog Stereo Duplex", Available: true},
+					{Name: "output:analog-stereo", Description: "Analog Stereo Output", Available: true},
+					{Name: "off", Description: "Off", Available: true},
+				},
+			},
+		},
+	})
+	model = m.(AppModel)
+
+	// ── Verify Devices tab (Screen 1) ──
+	view := model.View()
+	for _, want := range []string{
+		"SoundCtl", "Devices", "Sinks", "Profiles",
+		"Sony WH-1000XM5", "AirPods Pro", "JBL Flip 6",
+		"Bluetooth", "Volume",
+		"●", "○",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Devices tab missing %q", want)
+		}
+	}
+
+	// ── Switch to Sinks tab (Screen 2) ──
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+	view = model.View()
+	for _, want := range []string{
+		"Output Sinks", "Input Sources", "App Routing",
+		"bluez_sink.sony", "[default]", "★",
+		"Firefox", "Spotify", "→",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Sinks tab missing %q", want)
+		}
+	}
+
+	// ── Switch to Profiles tab (Screen 3) ──
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+	view = model.View()
+	for _, want := range []string{
+		"High Fidelity Playback",
+		"Headset Head Unit",
+		"Analog Stereo Duplex",
+		"Analog Stereo Output",
+		"●", "○",
+	} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Profiles tab missing %q", want)
+		}
+	}
+
+	// ── Open scanner overlay (Screen 4) ──
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftTab}) // back to Devices
+	model = m.(AppModel)
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	model = m.(AppModel)
+
+	m, _ = model.Update(OpenScannerMsg{})
+	model = m.(AppModel)
+	if !model.scanner.visible {
+		t.Fatal("expected scanner visible")
+	}
+
+	// Feed discovered devices
+	m, _ = model.Update(DiscoveredDevicesMsg{
+		Devices: []bluetooth.DiscoveredDevice{
+			{Address: "AA:BB:CC:DD:EE:FF", Name: "Bose QC45"},
+		},
+	})
+	model = m.(AppModel)
+	view = model.View()
+	for _, want := range []string{"Scanning", "Bose QC45", "enter pair", "esc"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("Scanner overlay missing %q", want)
+		}
+	}
+
+	// Close scanner
+	m, _ = model.Update(CloseScannerMsg{})
+	model = m.(AppModel)
+	if model.scanner.visible {
+		t.Fatal("expected scanner hidden after close")
+	}
+}
+
 func TestDevicesCursorNavigation(t *testing.T) {
 	model, _ := newTestApp()
 	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
