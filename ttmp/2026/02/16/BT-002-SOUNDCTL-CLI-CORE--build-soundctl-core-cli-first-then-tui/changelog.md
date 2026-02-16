@@ -69,3 +69,15 @@ Phase 2.1: Built Bubble Tea TUI shell with lipgloss-styled panes (Devices/Sinks/
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/app_test.go — 15 TUI unit tests
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/style.go — Lipgloss colour palette and style system
 
+
+## 2026-02-16
+
+Phase 2.2: Implement panes/overlay/keymap parity — real default detection, app routing, card-grouped profiles with radio-button selection, 3 new parsers (pactl info/sink-inputs/cards). 31 tests passing. (commit 4b9c5e8)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/audio/service.go — Added GetDefaults
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/parse/pactl.go — Added ParsePactlInfo
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/profiles.go — Card-grouped radio profiles
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/sinks.go — 3-section layout with app routing
+

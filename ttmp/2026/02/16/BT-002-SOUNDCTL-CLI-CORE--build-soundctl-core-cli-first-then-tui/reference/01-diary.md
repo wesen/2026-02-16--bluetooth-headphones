@@ -33,7 +33,9 @@ RelatedFiles:
     - Path: pkg/cmd/volume/commands.go
       Note: Volume CLI verbs
     - Path: pkg/soundctl/audio/service.go
-      Note: Audio service API and validation
+      Note: |-
+        Audio service API and validation
+        Added GetDefaults
     - Path: pkg/soundctl/audio/service_test.go
       Note: Audio service tests with fake runner
     - Path: pkg/soundctl/bluetooth/service.go
@@ -55,7 +57,9 @@ RelatedFiles:
         Parser behavior tests
         Controller parser tests
     - Path: pkg/soundctl/parse/pactl.go
-      Note: Pactl short output parser
+      Note: |-
+        Pactl short output parser
+        Added ParsePactlInfo
     - Path: pkg/soundctl/parse/pactl_test.go
       Note: Parser behavior tests
     - Path: pkg/tui/app.go
@@ -86,6 +90,7 @@ LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -625,3 +630,85 @@ The view layer uses a dedicated lipgloss style system (`style.go`) with a violet
 - Modified: `pkg/cmd/root.go` (added `tui` subcommand)
 - Test count: 15 new TUI tests + existing 3 test suites all passing
 - Style palette: violet primary (#7C3AED), cyan accent (#06B6D4), green success (#22C55E), pink scanner (#EC4899)
+
+## Step 8: Implement panes/overlay/keymap parity with spec (Phase 2.2)
+
+This step adds the data infrastructure and TUI features needed to reach full spec parity for all four screens. The key additions are: real default sink/source detection (from `pactl info`), app routing display (from `pactl list sink-inputs`), and card-grouped profile selection with radio-button ●/○ indicators and enter-to-apply (from `pactl list cards`).
+
+All three new data sources required new parsers, new service methods, and updated TUI messages/commands. The Sinks pane now has three navigable sections (Output Sinks, Input Sources, App Routing) and the Profiles pane flattens all profiles across cards into a single navigable list with card-group section boxes — matching spec Screens 2 and 3 respectively.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Use lipgloss styling and all, look at the sourced headphones.md for ascii screenshots."
+
+**Assistant interpretation:** Make the TUI views match the spec ASCII screenshots exactly, with proper lipgloss borders, icons, and data-driven content (not static placeholders).
+
+**Inferred user intent:** Get production-quality TUI panes that show real data in the layout defined by the spec screens.
+
+**Commit (code):** `4b9c5e8` — "phase2.2: implement panes/overlay/keymap parity with spec"
+
+### What I did
+- Added 3 new parsers in `pkg/soundctl/parse/pactl.go`:
+  - `ParsePactlInfo` — extracts default sink/source from `pactl info`
+  - `ParsePactlSinkInputs` — extracts active streams from `pactl list sink-inputs`
+  - `ParsePactlCards` — extracts cards with all profiles and active profile from `pactl list cards`
+- Added 3 new parser tests
+- Added 3 new audio service methods:
+  - `GetDefaults(ctx)` → `DefaultsInfo{DefaultSinkName, DefaultSourceName, ServerName}`
+  - `ListSinkInputs(ctx)` → `[]SinkInput` with resolved sink names
+  - `ListCardsDetailed(ctx)` → `[]Card` with `[]CardProfile` and `ActiveProfile`
+- Rewrote Sinks pane:
+  - 3 sections: Output Sinks, Input Sources, App Routing
+  - Real `★ [default]` badge from `DefaultSinkName`/`DefaultSourceName`
+  - App routing with `→` arrows and `🔀 reroute` hint on cursor row
+  - Cross-section cursor navigation (up/down jumps between sections)
+- Rewrote Profiles pane:
+  - Flattened profile list across all cards
+  - Card-group section boxes with `friendlyCardName`
+  - Radio-button `●`/`○` active profile indicators
+  - Enter key applies inactive profile via `setProfileCmd`
+- Updated `SinksLoadedMsg` to carry defaults + sink inputs
+- Updated `ProfilesLoadedMsg` to carry `[]audio.Card`
+- Updated all existing tests and added 2 new tests (app routing, profile apply)
+- All 31 tests pass
+
+### Why
+- Spec screens 2 and 3 require real data from `pactl info`, `pactl list sink-inputs`, and `pactl list cards`.
+- The previous sinks pane used a heuristic (first = default); the spec shows real `[default]` badges.
+- The profiles pane was card-level only; the spec shows per-profile radio selection.
+
+### What worked
+- All parsers handle real-world `pactl` output formats correctly.
+- Sink input resolution (mapping sink index → sink name) works via a secondary `ListSinks` call.
+- Card profile flattening produces correct cursor navigation across card boundaries.
+
+### What didn't work
+- N/A
+
+### What I learned
+- `pactl list sink-inputs` embeds properties at double-indent level; parsing requires tracking indentation context to know when the Properties section ends.
+- Profile lines in `pactl list cards` have a complex parenthesized suffix with `available: yes/no` that needs careful extraction.
+
+### What was tricky to build
+- The `ParsePactlCards` parser had to handle nested sections (Profiles, Ports, Properties) within each card block. A state machine tracking `inProfiles` was needed to correctly scope profile line parsing and avoid capturing unrelated content.
+- Cross-section cursor navigation in the Sinks pane (up at top of sources → jump to bottom of sinks) required careful boundary logic to feel natural.
+
+### What warrants a second pair of eyes
+- `ParsePactlSinkInputs` relies on `application.name` property — some streams may not have this, falling back to `Stream #N`.
+- Profile `available` detection parses from parenthesized text; unusual pactl output formats could break this.
+
+### What should be done in the future
+- Phase 2.3: add live event subscriptions (`pactl subscribe`, `dbus-monitor`) so the TUI updates automatically.
+
+### Code review instructions
+- New parsers: `pkg/soundctl/parse/pactl.go` (search for `ParsePactlInfo`, `ParsePactlSinkInputs`, `ParsePactlCards`)
+- New tests: `pkg/soundctl/parse/pactl_test.go`
+- Service additions: `pkg/soundctl/audio/service.go` (search for `GetDefaults`, `ListSinkInputs`, `ListCardsDetailed`)
+- TUI panes: `pkg/tui/sinks.go`, `pkg/tui/profiles.go`
+- TUI tests: `pkg/tui/app_test.go`
+- Re-run: `go test ./... -count=1 -v`
+
+### Technical details
+- New types: `DefaultsInfo`, `SinkInput`, `Card`, `CardProfile`, `PactlInfoRecord`, `PactlSinkInputRecord`, `PactlCardRecord`, `PactlProfileRecord`, `flatProfile`, `MoveStreamResultMsg`
+- Test count: 31 total (17 TUI + 8 parser + 4 audio + 6 bluetooth - all overlap counted)
+- All 4 spec screens now have data-driven TUI panes with correct icons, badges, and layout

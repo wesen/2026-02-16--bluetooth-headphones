@@ -17,5 +17,5 @@
 - [x] Phase 1.11: Improve Bluetooth visibility (`devices status` + mode/scanning fields in `devices list`)
 - [x] Phase 1.12: Add dual-mode scan/pair flow with `--wait` discovery primitive and initialize Glazed help system
 - [x] Phase 2.1 (deferred): Build Bubble Tea shell consuming the same `pkg/` services
-- [ ] Phase 2.2 (deferred): Implement panes/overlay/keymap parity with spec
+- [x] Phase 2.2 (deferred): Implement panes/overlay/keymap parity with spec
 - [ ] Phase 2.3 (deferred): Add live event subscriptions and TUI integration tests
