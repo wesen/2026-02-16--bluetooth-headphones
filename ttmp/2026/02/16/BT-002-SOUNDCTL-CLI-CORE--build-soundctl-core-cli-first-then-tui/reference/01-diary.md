@@ -58,6 +58,20 @@ RelatedFiles:
       Note: Pactl short output parser
     - Path: pkg/soundctl/parse/pactl_test.go
       Note: Parser behavior tests
+    - Path: pkg/tui/app.go
+      Note: Root TUI model (Phase 2.1)
+    - Path: pkg/tui/app_test.go
+      Note: TUI model unit tests
+    - Path: pkg/tui/devices.go
+      Note: Devices pane (Screen 1)
+    - Path: pkg/tui/profiles.go
+      Note: Profiles pane (Screen 3)
+    - Path: pkg/tui/scanner.go
+      Note: Scanner overlay (Screen 4)
+    - Path: pkg/tui/sinks.go
+      Note: Sinks pane (Screen 2)
+    - Path: pkg/tui/style.go
+      Note: Lipgloss style system
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/index.md
       Note: Ticket navigation and status context
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/playbook/01-phase-1-cli-smoke-checks-and-usage.md
@@ -72,6 +86,7 @@ LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -525,3 +540,88 @@ This gives two practical operation modes:
   - human-readable scan discovery summary in normal mode
   - structured `kind=discovered` rows plus summary row in glaze mode
   - detailed pair failure text instead of generic `exit status 1`
+
+## Step 7: Build Bubble Tea TUI shell with lipgloss-styled panes and overlay (Phase 2.1)
+
+This step builds the full TUI layer on top of the existing `pkg/soundctl/*` services, closely matching the four spec screens from `sources/local/headphones.md`. The architecture follows the design doc: a root `AppModel` coordinates child pane models (Devices, Sinks, Profiles) and a ScanOverlay, with typed messages routing through the root and an overlay-first key capture model.
+
+The view layer uses a dedicated lipgloss style system (`style.go`) with a violet/cyan colour palette, `RoundedBorder` section boxes, `▓░` volume bars, `●/○` device bullets, `★` default stars, and cursor-highlighted names — all matching the spec ASCII screenshots. The TUI is wired as `soundctl tui` via a new Cobra subcommand in root.go.
+
+### Prompt Context
+
+**User prompt (verbatim):** "Build docmgr ticket BT-002-SOUNDCTL-CLI-CORE, keep a frequent diary, go task by task, commit at opportune times, check tasks off"
+
+**Assistant interpretation:** Execute Phase 2 tasks for the ticket, building the Bubble Tea TUI, committing incrementally with diary updates.
+
+**Inferred user intent:** Get a working, spec-matching TUI that reuses the proven `pkg/` services, with proper test coverage and documentation.
+
+**Commit (code):** `4e3210e` — "phase2.1: build Bubble Tea TUI shell with lipgloss-styled panes and overlay"
+
+### What I did
+- Created 9 new files in `pkg/tui/`:
+  - `app.go` — root AppModel with window chrome, tab bar, pane routing
+  - `messages.go` — typed message definitions for all data/action flows
+  - `commands.go` — tea.Cmd wrappers calling `pkg/soundctl/*` services
+  - `keys.go` — KeyMap with all bindings matching the spec keybindings section
+  - `style.go` — lipgloss style system (colours, boxes, bars, icons)
+  - `devices.go` — DevicesPane matching Screen 1 (Bluetooth box + Volume box)
+  - `sinks.go` — SinksPane matching Screen 2 (Output Sinks + Input Sources)
+  - `profiles.go` — ProfilesPane matching Screen 3 (card-grouped sections)
+  - `scanner.go` — ScanOverlay matching Screen 4 (spinner + discovered list)
+- Created `app_test.go` with 15 unit tests:
+  - Init, tab switch, shift-tab reverse, status/error messages, quit
+  - Data loading (DevicesLoaded, SinksLoaded, ProfilesLoaded)
+  - Scanner open/close, scanner view content
+  - View rendering for all three tabs with content assertions
+  - Cursor navigation with j/k keys
+- Wired `soundctl tui` subcommand in `pkg/cmd/root.go`
+
+### Why
+- Phase 2.1 task requires building the Bubble Tea shell consuming the same `pkg/` services.
+- The spec defines exact visual targets; matching them validates that the TUI architecture is correct.
+
+### What worked
+- All 15 TUI tests pass alongside the existing 3 service/parser test suites.
+- `soundctl tui --help` renders correctly.
+- View snapshot tests confirm all expected content appears in each tab's rendered output.
+
+### What didn't work
+- N/A — clean build and test run on first attempt.
+
+### What I learned
+- Routing spinner.TickMsg through the root model requires explicit forwarding to the scanner when it's actively scanning, since Bubble Tea doesn't automatically deliver to child models.
+- Overlay-first key capture (scanner blocks all key routing to panes) is simple to implement but requires careful placement in the Update switch.
+
+### What was tricky to build
+- Getting lipgloss `JoinHorizontal` to produce the Screen 4 side-by-side layout required setting explicit `Width` on the left pane style, otherwise the pane content would consume the full terminal width and push the scanner off-screen.
+- Volume bars with `▓░` characters needed explicit rune-level string building since Go's `strings.Repeat` works on strings but we wanted correct multi-byte rendering.
+
+### What warrants a second pair of eyes
+- Volume data is currently static placeholder (72%/90%/35%) — Phase 2.3 will add live PulseAudio subscriptions to populate real values.
+- Default sink/source detection uses a heuristic (first item = default) rather than querying `pactl info` for the actual default. This should be improved.
+
+### What should be done in the future
+- Phase 2.2: polish pane/overlay/keymap parity (app routing section, profile sub-selection, contextual button highlighting).
+- Phase 2.3: add `pactl subscribe` and `dbus-monitor` live event subscriptions.
+
+### Code review instructions
+- Start with architecture:
+  - `pkg/tui/app.go` (root model, routing, view composition)
+  - `pkg/tui/messages.go` (message types)
+  - `pkg/tui/style.go` (visual system)
+- Review each pane against its spec screen:
+  - `pkg/tui/devices.go` → Screen 1
+  - `pkg/tui/sinks.go` → Screen 2
+  - `pkg/tui/profiles.go` → Screen 3
+  - `pkg/tui/scanner.go` → Screen 4
+- Validate tests:
+  - `go test ./pkg/tui/ -v -count=1`
+  - `go test ./... -count=1`
+- Smoke check:
+  - `go run ./cmd/soundctl tui --help`
+
+### Technical details
+- New files: `pkg/tui/{app,app_test,commands,devices,keys,messages,profiles,scanner,sinks,style}.go`
+- Modified: `pkg/cmd/root.go` (added `tui` subcommand)
+- Test count: 15 new TUI tests + existing 3 test suites all passing
+- Style palette: violet primary (#7C3AED), cyan accent (#06B6D4), green success (#22C55E), pink scanner (#EC4899)

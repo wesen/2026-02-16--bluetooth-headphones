@@ -58,3 +58,14 @@ Step 5: Added bluetooth visibility improvements with devices status and mode/sca
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/bluetooth/service.go — Controller and per-device state composition
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/reference/01-diary.md — Implementation and test narrative
 
+
+## 2026-02-16
+
+Phase 2.1: Built Bubble Tea TUI shell with lipgloss-styled panes (Devices/Sinks/Profiles), scanner overlay, typed message routing, and 15 unit tests. Wired as 'soundctl tui' subcommand. (commit 4e3210e)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/app.go — Root TUI model with tab bar and pane routing
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/app_test.go — 15 TUI unit tests
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/style.go — Lipgloss colour palette and style system
+
