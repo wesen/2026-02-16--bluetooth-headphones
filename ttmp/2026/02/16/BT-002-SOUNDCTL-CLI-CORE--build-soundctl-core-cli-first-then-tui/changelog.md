@@ -25,3 +25,13 @@ Step 2: Bootstrapped Go module/layout, added runner abstraction (OS + fake), imp
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/parse/bluetooth.go — Bluetooth parser
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/parse/pactl.go — Pactl parser
 
+
+## 2026-02-16
+
+Step 3: Implemented Bluetooth and audio core services with fake-runner-backed unit tests and validation guards.
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/audio/service.go — Audio core methods
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/bluetooth/service.go — Bluetooth core methods
+

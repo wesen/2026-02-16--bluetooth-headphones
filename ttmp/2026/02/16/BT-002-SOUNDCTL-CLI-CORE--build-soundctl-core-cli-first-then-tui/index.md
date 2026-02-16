@@ -10,6 +10,10 @@ DocType: index
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pkg/soundctl/audio/service.go
+      Note: Core audio operations for CLI/TUI
+    - Path: pkg/soundctl/bluetooth/service.go
+      Note: Core bluetooth operations for CLI/TUI
     - Path: pkg/soundctl/exec/runner.go
       Note: Core runner abstraction used by all services
     - Path: pkg/soundctl/parse/bluetooth.go
@@ -28,6 +32,7 @@ LastUpdated: 2026-02-16T14:12:41.247973418-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 

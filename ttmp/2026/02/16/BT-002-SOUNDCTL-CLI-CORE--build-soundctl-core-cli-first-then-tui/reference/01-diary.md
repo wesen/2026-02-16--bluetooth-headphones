@@ -10,6 +10,14 @@ DocType: reference
 Intent: long-term
 Owners: []
 RelatedFiles:
+    - Path: pkg/soundctl/audio/service.go
+      Note: Audio service API and validation
+    - Path: pkg/soundctl/audio/service_test.go
+      Note: Audio service tests with fake runner
+    - Path: pkg/soundctl/bluetooth/service.go
+      Note: Bluetooth service API and command mapping
+    - Path: pkg/soundctl/bluetooth/service_test.go
+      Note: Bluetooth service tests with fake runner
     - Path: pkg/soundctl/exec/runner.go
       Note: Command runner abstraction and fake test double
     - Path: pkg/soundctl/parse/bluetooth.go
@@ -30,6 +38,7 @@ LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -55,7 +64,7 @@ We'll tackle the TUI after that, once the core functionality works."
 
 **Inferred user intent:** Build production code iteratively with strong traceability and test discipline, postponing TUI work until backend correctness is validated.
 
-**Commit (code):** N/A
+**Commit (code):** `3e18d23` — "phase1: scaffold module runner and parser foundation"
 
 ### What I did
 - Created ticket `BT-002-SOUNDCTL-CLI-CORE`.
@@ -172,4 +181,70 @@ I also added initial parsers for `bluetoothctl` and `pactl` short outputs with u
 - Commands used:
   - `go mod init soundctl`
   - `gofmt -w ...`
+  - `go test ./...`
+
+## Step 3: Implement Bluetooth and audio core services with fake-runner tests
+
+With the runner/parsing layer in place, I implemented service packages that provide the actual operational API for the future CLI and TUI layers. The Bluetooth service now covers list/info/connect/disconnect/trust/remove/pair/scan, and the audio service covers list/set-default/move-stream/profile/volume/mute operations.
+
+I validated service behavior through unit tests using the fake runner, ensuring command construction and parser integration can be verified deterministically.
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 1)
+
+**Assistant interpretation:** Continue task-by-task implementation in `pkg/` and test each slice before moving to CLI wrappers.
+
+**Inferred user intent:** Establish a stable, reusable backend surface before command/TUI layers.
+
+**Commit (code):** N/A
+
+### What I did
+- Added Bluetooth service:
+  - `pkg/soundctl/bluetooth/service.go`
+  - methods: `ListDevices`, `Info`, `Connect`, `Disconnect`, `Trust`, `Remove`, `Pair`, `StartScan`, `StopScan`
+- Added Bluetooth tests:
+  - `pkg/soundctl/bluetooth/service_test.go`
+- Added audio service:
+  - `pkg/soundctl/audio/service.go`
+  - methods: `ListSinks`, `ListSources`, `ListCards`, `SetDefaultSink`, `SetDefaultSource`, `MoveSinkInput`, `SetCardProfile`, `SetVolume`, `ToggleMute`
+- Added audio tests:
+  - `pkg/soundctl/audio/service_test.go`
+- Ran formatting + full test suite.
+
+### Why
+- These services are the core contract that CLI verbs and future TUI components should depend on.
+
+### What worked
+- Service methods compile and execute against fake-runner stubs.
+- Unit tests passed for command behavior and validation.
+
+### What didn't work
+- N/A
+
+### What I learned
+- Separating parser utilities from service orchestration kept service tests focused on command behavior and input validation.
+
+### What was tricky to build
+- Audio operations have target-dependent command variants (`sink` vs `source`) and numeric/value validation constraints. Encoding these as shared helper functions (`volumeCommand`, `muteCommand`) reduced duplication and made validation behavior explicit.
+
+### What warrants a second pair of eyes
+- Validate whether the current volume range guard (`0..150`) matches expected operational policy for this tool.
+
+### What should be done in the future
+- Implement Glazed CLI wrappers on top of these services, ensuring no command execution logic leaks into CLI packages.
+
+### Code review instructions
+- Start with:
+  - `pkg/soundctl/bluetooth/service.go`
+  - `pkg/soundctl/audio/service.go`
+- Validate behavior via tests:
+  - `pkg/soundctl/bluetooth/service_test.go`
+  - `pkg/soundctl/audio/service_test.go`
+- Re-run:
+  - `go test ./...`
+
+### Technical details
+- Commands used:
+  - `gofmt -w pkg/soundctl/bluetooth/service.go pkg/soundctl/bluetooth/service_test.go pkg/soundctl/audio/service.go pkg/soundctl/audio/service_test.go`
   - `go test ./...`
