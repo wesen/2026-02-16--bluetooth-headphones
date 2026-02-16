@@ -76,6 +76,10 @@ RelatedFiles:
       Note: Sinks pane (Screen 2)
     - Path: pkg/tui/style.go
       Note: Lipgloss style system
+    - Path: pkg/tui/subscriptions.go
+      Note: Live PulseAudio + Bluetooth subscriptions with debounce
+    - Path: pkg/tui/subscriptions_test.go
+      Note: Subscription parser tests
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/index.md
       Note: Ticket navigation and status context
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/playbook/01-phase-1-cli-smoke-checks-and-usage.md
@@ -90,6 +94,7 @@ LastUpdated: 2026-02-16T14:12:41.375423356-05:00
 WhatFor: ""
 WhenToUse: ""
 ---
+
 
 
 
@@ -712,3 +717,85 @@ All three new data sources required new parsers, new service methods, and update
 - New types: `DefaultsInfo`, `SinkInput`, `Card`, `CardProfile`, `PactlInfoRecord`, `PactlSinkInputRecord`, `PactlCardRecord`, `PactlProfileRecord`, `flatProfile`, `MoveStreamResultMsg`
 - Test count: 31 total (17 TUI + 8 parser + 4 audio + 6 bluetooth - all overlap counted)
 - All 4 spec screens now have data-driven TUI panes with correct icons, badges, and layout
+
+## Step 9: Add live event subscriptions and TUI integration tests (Phase 2.3)
+
+This step completes the TUI implementation by adding live event subscriptions that keep the UI in sync with hardware changes, and a comprehensive integration test that validates all four spec screens in a single test scenario.
+
+The subscription architecture uses the idiomatic Bubble Tea pattern: a goroutine-backed channel reader returns a `tea.Cmd` that waits for the next event. After each event arrives in `Update`, the handler re-issues `WaitCmd()` to keep the subscription alive. A 300ms debounce timer prevents rapid-fire reloads when many events arrive at once (common during device connect/disconnect).
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 7)
+
+**Assistant interpretation:** Complete Phase 2.3, the final task — add live event subscriptions and integration tests.
+
+**Inferred user intent:** Have a fully working TUI that auto-updates when bluetooth/audio state changes externally, with comprehensive test coverage.
+
+**Commit (code):** `2ae94bd` — "phase2.3: add live event subscriptions and TUI integration tests"
+
+### What I did
+- Created `pkg/tui/subscriptions.go`:
+  - `PulseAudioSubscription`: spawns `pactl subscribe`, parses `Event 'change' on sink #47` lines
+  - `BluetoothSubscription`: spawns `dbus-monitor --system` for `org.bluez` signals, parses PropertiesChanged/InterfacesAdded/InterfacesRemoved
+  - `debounceRefreshCmd()`: 300ms timer → `RefreshTickMsg`
+  - Both expose `WaitCmd() tea.Cmd` for recurring Bubble Tea integration
+- Created `pkg/tui/subscriptions_test.go`:
+  - `TestParsePactlSubscribeLine` — 6 test cases (change/new/remove/card/empty/garbage)
+  - `TestParseDbusMonitorLine` — 4 test cases (property-changed/added/removed/random)
+- Updated `pkg/tui/app.go`:
+  - `Init()` starts both subscriptions and issues initial `WaitCmd`
+  - `Update()` handles `PulseAudioEventMsg`, `BluetoothEventMsg`, `RefreshTickMsg`
+  - Debounce: first event sets `refreshPending=true` and schedules timer; subsequent events during pending are no-ops
+  - `RefreshTickMsg` resets pending and reloads all three data sources
+- Added 5 new tests in `pkg/tui/app_test.go`:
+  - `TestPulseAudioEventTriggersRefresh`
+  - `TestBluetoothEventTriggersRefresh`
+  - `TestRefreshTickResetsAndReloads`
+  - `TestDebouncePreventsDoubleRefresh`
+  - `TestIntegrationFullDataFlow` — end-to-end: loads realistic multi-device/sink/card data, verifies all 4 tab views, opens/uses scanner overlay
+
+### Why
+- The spec defines long-lived subscriptions as critical: the TUI must update live when devices/sinks/profiles change externally.
+- Integration testing validates that the full message routing, view rendering, and data flow work together correctly.
+
+### What worked
+- Subscription parsers correctly extract event types from both `pactl subscribe` and `dbus-monitor` output formats.
+- Debounce pattern prevents redundant data reloads.
+- Integration test covers all 4 spec screens in a single scenario with content assertions.
+- All 42 tests pass.
+
+### What didn't work
+- N/A
+
+### What I learned
+- The Bubble Tea subscription pattern (channel + WaitCmd + re-subscribe in Update) is clean but requires discipline: forgetting to re-issue WaitCmd silently drops all future events.
+- Debouncing is essential for bluetooth events — a single connect/disconnect can generate 5-10 PropertiesChanged signals in quick succession.
+
+### What was tricky to build
+- `dbus-monitor` output is multi-line and signal-oriented, not one event per line. The current parser uses a simple single-line heuristic (check for `member=PropertiesChanged` etc.) which works for triggering refreshes but doesn't extract structured event details. This is sufficient for "something changed, reload" but would need a stateful multi-line parser for fine-grained event handling.
+
+### What warrants a second pair of eyes
+- The subscription goroutines start in `Init()` but cleanup (`Stop()`) currently relies on the context being cancelled when the program exits. If the TUI is restarted or used as a library, explicit cleanup should be added.
+- The debounce timer is 300ms — this should be tuned based on real-world event burst patterns.
+
+### What should be done in the future
+- Add graceful subscription shutdown via `tea.QuitMsg` handler.
+- Add real volume data from `pactl list sinks` (current Volume section uses static placeholders).
+- Add per-app reroute action in the Sinks tab app routing section.
+- Consider replacing `dbus-monitor` line parsing with a Go DBus library for richer event semantics.
+
+### Code review instructions
+- Subscription architecture:
+  - `pkg/tui/subscriptions.go` — subscription types, parsers, debounce
+  - `pkg/tui/subscriptions_test.go` — parser tests
+- Event handling integration:
+  - `pkg/tui/app.go` — Init(), Update() event handling sections
+  - `pkg/tui/app_test.go` — search for `TestPulseAudio`, `TestBluetooth`, `TestRefresh`, `TestDebounce`, `TestIntegration`
+- Re-run: `go test ./... -count=1 -v`
+
+### Technical details
+- New files: `pkg/tui/subscriptions.go`, `pkg/tui/subscriptions_test.go`
+- New message types: `PulseAudioEventMsg`, `BluetoothEventMsg`, `RefreshTickMsg`
+- Test count: 42 total (24 TUI + 8 parser + 4 audio + 6 bluetooth)
+- All 17 tasks now checked off; ticket ready to close

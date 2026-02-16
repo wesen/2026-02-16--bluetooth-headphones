@@ -30,6 +30,10 @@ RelatedFiles:
       Note: Bluetooth parsing for service layer
     - Path: pkg/soundctl/parse/pactl.go
       Note: Audio parsing for service layer
+    - Path: pkg/tui/app.go
+      Note: TUI root model
+    - Path: pkg/tui/subscriptions.go
+      Note: Live event subscriptions
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/design-doc/01-two-phase-build-plan-cli-core-first-tui-second.md
       Note: Two-phase design and execution constraints
     - Path: ttmp/2026/02/16/BT-002-SOUNDCTL-CLI-CORE--build-soundctl-core-cli-first-then-tui/reference/01-diary.md
@@ -48,13 +52,15 @@ WhenToUse: ""
 
 
 
+
 # Build SoundCtl core + CLI first, then TUI
 
 ## Overview
 
 This ticket implements SoundCtl in two phases.
-Current status: **Phase 1 complete** with a testable `pkg/` core and Glazed CLI wrappers.
-**Phase 2** (Bubble Tea TUI) is intentionally deferred until core functionality and tests are stable.
+**Both phases are complete.** Phase 1 delivers a testable `pkg/` core with Glazed CLI wrappers.
+Phase 2 delivers a Bubble Tea TUI with lipgloss-styled panes matching all 4 spec screens,
+live event subscriptions, and 42 total tests.
 
 ## Key Links
 

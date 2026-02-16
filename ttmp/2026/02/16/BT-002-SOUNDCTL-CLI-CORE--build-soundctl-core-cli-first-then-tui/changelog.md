@@ -81,3 +81,14 @@ Phase 2.2: Implement panes/overlay/keymap parity — real default detection, app
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/profiles.go — Card-grouped radio profiles
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/sinks.go — 3-section layout with app routing
 
+
+## 2026-02-16
+
+Phase 2.3: Live event subscriptions (pactl subscribe + dbus-monitor) with debounced refresh, full 4-screen integration test, 42 total tests. All tasks complete. (commit 2ae94bd)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/app_test.go — Integration test + event handling tests
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/subscriptions.go — PulseAudio + Bluetooth live subscriptions
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/subscriptions_test.go — Subscription parser tests
+

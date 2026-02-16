@@ -18,4 +18,4 @@
 - [x] Phase 1.12: Add dual-mode scan/pair flow with `--wait` discovery primitive and initialize Glazed help system
 - [x] Phase 2.1 (deferred): Build Bubble Tea shell consuming the same `pkg/` services
 - [x] Phase 2.2 (deferred): Implement panes/overlay/keymap parity with spec
-- [ ] Phase 2.3 (deferred): Add live event subscriptions and TUI integration tests
+- [x] Phase 2.3 (deferred): Add live event subscriptions and TUI integration tests
