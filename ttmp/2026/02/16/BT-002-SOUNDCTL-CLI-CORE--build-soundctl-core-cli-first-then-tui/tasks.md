@@ -19,3 +19,9 @@
 - [x] Phase 2.1 (deferred): Build Bubble Tea shell consuming the same `pkg/` services
 - [x] Phase 2.2 (deferred): Implement panes/overlay/keymap parity with spec
 - [x] Phase 2.3 (deferred): Add live event subscriptions and TUI integration tests
+- [x] Phase 3.1: Implement preset data model and YAML persistence in pkg/soundctl/preset/
+- [x] Phase 3.2: Implement preset apply logic (batch set-card-profile, set-volume, set-default-sink, move-sink-input)
+- [x] Phase 3.3: Implement snapshot-current (capture live state into a Preset)
+- [x] Phase 3.4: Add Glazed CLI verbs for presets (list, apply, save, delete, snapshot)
+- [x] Phase 3.5: Add TUI Presets tab (Screen 5) with apply confirmation overlay (Screen 7)
+- [x] Phase 3.6: Add preset tests (persistence, apply, snapshot, CLI, TUI integration)

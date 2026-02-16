@@ -799,3 +799,60 @@ The subscription architecture uses the idiomatic Bubble Tea pattern: a goroutine
 - New message types: `PulseAudioEventMsg`, `BluetoothEventMsg`, `RefreshTickMsg`
 - Test count: 42 total (24 TUI + 8 parser + 4 audio + 6 bluetooth)
 - All 17 tasks now checked off; ticket ready to close
+
+## Step 10: Implement preset data model, YAML persistence, apply, diff, snapshot (Phase 3.1–3.3)
+
+After importing the preset spec (`headphones-presets.md`), I implemented the complete preset subsystem. This includes a YAML-backed Store at `~/.config/soundctl/presets.yaml`, an Apply function that batch-executes card profiles + volumes + default sink + app routing, a Diff function for computing changes, and a SnapshotCurrent function that captures live audio state.
+
+### Prompt Context
+
+**User prompt (verbatim):** "docmgr import file --file /tmp/headphones-presets.md --ticket BT-002-SOUNDCTL-CLI-CORE and then implement the preset functionality, storing presets in ~/.config/soundctl/presets.yaml"
+
+**Assistant interpretation:** Import the preset spec, add tasks, implement preset CRUD + apply + snapshot with YAML persistence.
+
+**Inferred user intent:** Add preset management so users can save/recall audio configurations.
+
+**Commit (code):** `b425a16` — "phase3.1-3.3: preset data model, YAML persistence, apply, snapshot"
+
+### What I did
+- Created `pkg/soundctl/preset/preset.go`: Preset struct, VolumeSpec, DiffLine, Store (Save/Get/List/Delete)
+- Created `pkg/soundctl/preset/apply.go`: Apply (batch execution), Diff (change computation)
+- Created `pkg/soundctl/preset/snapshot.go`: SnapshotCurrent (capture live state)
+- 16 tests: 9 persistence, 6 apply/diff, 1 snapshot
+
+### What was tricky to build
+- Apply must execute steps in the right order: card profiles first (which may create/destroy sinks), then default sink, then volumes, then app routing. This ordering prevents routing to non-existent sinks.
+
+### What warrants a second pair of eyes
+- Volume snapshot currently captures 100% placeholder since we don't parse volume levels from `pactl list sinks` yet.
+
+### What should be done in the future
+- Parse `pactl list sinks` for actual volume percentages in snapshot.
+
+## Step 11: Add CLI verbs and TUI Presets tab (Phase 3.4–3.6)
+
+Wired preset functionality into both CLI and TUI. CLI verbs: `presets list/apply/save/delete/snapshot`. TUI: 4th tab "Presets" (Screen 5) with apply confirmation overlay (Screen 7).
+
+### Prompt Context
+
+**User prompt (verbatim):** (same as Step 10)
+
+**Commit (code):** `ed8feb1` — "phase3.4: add Glazed CLI verbs for presets" / `efef6aa` — "phase3.5: add TUI Presets tab"
+
+### What I did
+- Created `pkg/cmd/presets/commands.go`: 5 Glazed CLI verbs (list/apply/save/delete/snapshot)
+- Updated `pkg/cmd/root.go` and `cmd/soundctl/main.go` with PresetStore dependency
+- Created `pkg/tui/presets.go`: PresetsPane with apply confirmation overlay
+- Updated app.go: 4-tab layout, preset message routing
+- 3 new TUI tests (presets view, confirm flow, active marker)
+- 61 total tests passing across all packages
+
+### What was tricky to build
+- The confirmation overlay captures keys exclusively (like the scanner), but must also handle ←→ for button focus, which conflicts with volume adjust keys in other tabs. Scoping key capture to the overlay avoids this.
+
+### What warrants a second pair of eyes
+- Confirm diff display uses a simplified pseudo-preset for "current state" rather than a full snapshot. A real diff would require calling SnapshotCurrent, which is async.
+
+### What should be done in the future
+- Add preset editor (Screen 6) with inline profile/volume/route editing.
+- Add preset clone functionality.

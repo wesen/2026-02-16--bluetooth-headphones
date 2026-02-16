@@ -92,3 +92,16 @@ Phase 2.3: Live event subscriptions (pactl subscribe + dbus-monitor) with deboun
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/subscriptions.go — PulseAudio + Bluetooth live subscriptions
 - /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/subscriptions_test.go — Subscription parser tests
 
+
+## 2026-02-16
+
+Phase 3: Preset system — YAML persistence (~/.config/soundctl/presets.yaml), batch apply, diff, snapshot, 5 CLI verbs, TUI Presets tab with confirm overlay. 61 total tests. All 23 tasks complete. (commits b425a16..efef6aa)
+
+### Related Files
+
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/cmd/presets/commands.go — CLI preset verbs
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/preset/apply.go — Apply + Diff functions
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/preset/preset.go — Preset data model and YAML Store
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/soundctl/preset/snapshot.go — SnapshotCurrent
+- /home/manuel/code/wesen/2026-02-16--bluetooth-headphones/pkg/tui/presets.go — TUI Presets tab + confirm overlay
+
