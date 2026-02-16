@@ -77,7 +77,31 @@ func loadSinksCmd(au audio.Service) tea.Cmd {
 			return SinksLoadedMsg{Err: err}
 		}
 		sources, err := au.ListSources(ctx)
-		return SinksLoadedMsg{Sinks: sinks, Sources: sources, Err: err}
+		if err != nil {
+			return SinksLoadedMsg{Err: err}
+		}
+		inputs, err := au.ListSinkInputs(ctx)
+		if err != nil {
+			return SinksLoadedMsg{Err: err}
+		}
+		defaults, err := au.GetDefaults(ctx)
+		if err != nil {
+			return SinksLoadedMsg{Err: err}
+		}
+		return SinksLoadedMsg{
+			Sinks:             sinks,
+			Sources:           sources,
+			SinkInputs:        inputs,
+			DefaultSinkName:   defaults.DefaultSinkName,
+			DefaultSourceName: defaults.DefaultSourceName,
+		}
+	}
+}
+
+func moveSinkInputCmd(au audio.Service, streamID int, sink string) tea.Cmd {
+	return func() tea.Msg {
+		err := au.MoveSinkInput(context.Background(), streamID, sink)
+		return MoveStreamResultMsg{StreamID: streamID, Sink: sink, Err: err}
 	}
 }
 
@@ -97,7 +121,7 @@ func setDefaultSourceCmd(au audio.Service, name string) tea.Cmd {
 
 func loadProfilesCmd(au audio.Service) tea.Cmd {
 	return func() tea.Msg {
-		cards, err := au.ListCards(context.Background())
+		cards, err := au.ListCardsDetailed(context.Background())
 		return ProfilesLoadedMsg{Cards: cards, Err: err}
 	}
 }

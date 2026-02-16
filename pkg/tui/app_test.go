@@ -32,9 +32,24 @@ func newTestApp() (AppModel, *exec.FakeRunner) {
 		Output: "2\ttest-source\tmodule-alsa-card.c\ts16le 2ch 48000Hz\tIDLE",
 	})
 
-	// Stub cards
+	// Stub cards (short form for existing service)
 	runner.Set("pactl", []string{"list", "short", "cards"}, exec.CommandResult{
 		Output: "0\ttest-card\tmodule-alsa-card.c",
+	})
+
+	// Stub pactl info for defaults
+	runner.Set("pactl", []string{"info"}, exec.CommandResult{
+		Output: "Default Sink: test-sink\nDefault Source: test-source\nServer Name: PipeWire",
+	})
+
+	// Stub sink-inputs
+	runner.Set("pactl", []string{"list", "sink-inputs"}, exec.CommandResult{
+		Output: "",
+	})
+
+	// Stub detailed cards for TUI profiles
+	runner.Set("pactl", []string{"list", "cards"}, exec.CommandResult{
+		Output: "Card #0\n\tName: test-card\n\tDriver: module-alsa-card.c\n\tProfiles:\n\t\toutput:stereo: Stereo Output (sinks: 1, sources: 0, priority: 6500, available: yes)\n\t\toff: Off (sinks: 0, sources: 0, priority: 0, available: yes)\n\tActive Profile: output:stereo",
 	})
 
 	bt := bluetooth.NewExecService(runner)
@@ -171,8 +186,10 @@ func TestSinksLoadedMsg(t *testing.T) {
 	model = m.(AppModel)
 
 	m, _ = model.Update(SinksLoadedMsg{
-		Sinks:   []audio.ShortRecord{{ID: 1, Name: "sink1", State: "RUNNING"}},
-		Sources: []audio.ShortRecord{{ID: 2, Name: "source1", State: "IDLE"}},
+		Sinks:             []audio.ShortRecord{{ID: 1, Name: "sink1", State: "RUNNING"}},
+		Sources:           []audio.ShortRecord{{ID: 2, Name: "source1", State: "IDLE"}},
+		DefaultSinkName:   "sink1",
+		DefaultSourceName: "source1",
 	})
 	model = m.(AppModel)
 
@@ -182,6 +199,9 @@ func TestSinksLoadedMsg(t *testing.T) {
 	if len(model.sinks.sources) != 1 {
 		t.Fatalf("expected 1 source, got %d", len(model.sinks.sources))
 	}
+	if model.sinks.defaultSinkName != "sink1" {
+		t.Fatalf("expected default sink 'sink1', got %q", model.sinks.defaultSinkName)
+	}
 }
 
 func TestProfilesLoadedMsg(t *testing.T) {
@@ -190,12 +210,27 @@ func TestProfilesLoadedMsg(t *testing.T) {
 	model = m.(AppModel)
 
 	m, _ = model.Update(ProfilesLoadedMsg{
-		Cards: []audio.ShortRecord{{ID: 0, Name: "card1", Driver: "alsa"}},
+		Cards: []audio.Card{{
+			Index:         0,
+			Name:          "card1",
+			Driver:        "alsa",
+			ActiveProfile: "stereo",
+			Profiles: []audio.CardProfile{
+				{Name: "stereo", Description: "Stereo Output", Available: true},
+				{Name: "off", Description: "Off", Available: true},
+			},
+		}},
 	})
 	model = m.(AppModel)
 
 	if len(model.profiles.cards) != 1 {
 		t.Fatalf("expected 1 card, got %d", len(model.profiles.cards))
+	}
+	if len(model.profiles.flat) != 2 {
+		t.Fatalf("expected 2 flat profiles, got %d", len(model.profiles.flat))
+	}
+	if !model.profiles.flat[0].isActive {
+		t.Fatal("expected first profile to be active")
 	}
 }
 
@@ -254,13 +289,15 @@ func TestViewRendersSinksTab(t *testing.T) {
 
 	// Load data
 	m, _ = model.Update(SinksLoadedMsg{
-		Sinks:   []audio.ShortRecord{{ID: 1, Name: "alsa-sink-stereo", State: "RUNNING"}},
-		Sources: []audio.ShortRecord{{ID: 2, Name: "alsa-source-mono", State: "IDLE"}},
+		Sinks:             []audio.ShortRecord{{ID: 1, Name: "alsa-sink-stereo", State: "RUNNING"}},
+		Sources:           []audio.ShortRecord{{ID: 2, Name: "alsa-source-mono", State: "IDLE"}},
+		DefaultSinkName:   "alsa-sink-stereo",
+		DefaultSourceName: "alsa-source-mono",
 	})
 	model = m.(AppModel)
 
 	view := model.View()
-	for _, want := range []string{"Output Sinks", "Input Sources", "alsa-sink-stereo", "alsa-source-mono", "default"} {
+	for _, want := range []string{"Output Sinks", "Input Sources", "App Routing", "alsa-sink-stereo", "alsa-source-mono", "default"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("sinks view missing %q", want)
 		}
@@ -278,14 +315,23 @@ func TestViewRendersProfilesTab(t *testing.T) {
 	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
 	model = m.(AppModel)
 
-	// Load data
+	// Load data with full card + profiles
 	m, _ = model.Update(ProfilesLoadedMsg{
-		Cards: []audio.ShortRecord{{ID: 0, Name: "alsa_card.pci_0000", Driver: "module-alsa-card.c"}},
+		Cards: []audio.Card{{
+			Index:         0,
+			Name:          "alsa_card.pci_0000",
+			Driver:        "module-alsa-card.c",
+			ActiveProfile: "output:stereo",
+			Profiles: []audio.CardProfile{
+				{Name: "output:stereo", Description: "Analog Stereo Output", Available: true},
+				{Name: "off", Description: "Off", Available: true},
+			},
+		}},
 	})
 	model = m.(AppModel)
 
 	view := model.View()
-	for _, want := range []string{"pci 0000", "module-alsa-card.c"} {
+	for _, want := range []string{"pci 0000", "Analog Stereo Output", "Off"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("profiles view missing %q", want)
 		}
@@ -315,6 +361,75 @@ func TestScannerOverlayViewWithDevices(t *testing.T) {
 		if !strings.Contains(view, want) {
 			t.Errorf("scanner view missing %q", want)
 		}
+	}
+}
+
+func TestSinksWithAppRouting(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// Switch to Sinks
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+
+	m, _ = model.Update(SinksLoadedMsg{
+		Sinks:   []audio.ShortRecord{{ID: 1, Name: "bt-sink", State: "RUNNING"}},
+		Sources: []audio.ShortRecord{{ID: 2, Name: "bt-source", State: "IDLE"}},
+		SinkInputs: []audio.SinkInput{
+			{Index: 57, SinkIndex: 1, AppName: "Firefox", SinkName: "bt-sink"},
+			{Index: 63, SinkIndex: 1, AppName: "Spotify", SinkName: "bt-sink"},
+		},
+		DefaultSinkName:   "bt-sink",
+		DefaultSourceName: "bt-source",
+	})
+	model = m.(AppModel)
+
+	view := model.View()
+	for _, want := range []string{"Firefox", "Spotify", "bt-sink", "App Routing"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("sinks view with routing missing %q", want)
+		}
+	}
+}
+
+func TestProfilesApplyViaEnter(t *testing.T) {
+	model, _ := newTestApp()
+	m, _ := model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	model = m.(AppModel)
+
+	// Switch to Profiles
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyTab})
+	model = m.(AppModel)
+
+	// Load profiles
+	m, _ = model.Update(ProfilesLoadedMsg{
+		Cards: []audio.Card{{
+			Index:         0,
+			Name:          "test-card",
+			ActiveProfile: "stereo",
+			Profiles: []audio.CardProfile{
+				{Name: "stereo", Description: "Stereo", Available: true},
+				{Name: "off", Description: "Off", Available: true},
+			},
+		}},
+	})
+	model = m.(AppModel)
+
+	// Move cursor to "off" profile
+	m, _ = model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	model = m.(AppModel)
+
+	if model.profiles.cursor != 1 {
+		t.Fatalf("expected cursor at 1, got %d", model.profiles.cursor)
+	}
+
+	// Press enter — should produce a setProfile command
+	_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected setProfile command on enter for inactive profile")
 	}
 }
 

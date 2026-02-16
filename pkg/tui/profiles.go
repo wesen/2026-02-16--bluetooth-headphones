@@ -10,10 +10,22 @@ import (
 	"soundctl/pkg/soundctl/audio"
 )
 
-// ProfilesPane shows audio cards and allows profile switching,
-// matching the spec Screen 3 layout with card-grouped profiles.
+// flatProfile is a flattened view: one row per profile across all cards.
+type flatProfile struct {
+	cardIndex     int
+	cardName      string
+	profName      string
+	profDesc      string
+	isActive      bool
+	isAvailable   bool
+	isFirstInCard bool // marks the start of a new card group
+}
+
+// ProfilesPane shows audio cards with their profiles in radio-button style
+// (spec Screen 3). Cursor navigates across all profiles; enter applies.
 type ProfilesPane struct {
-	cards  []audio.ShortRecord
+	cards  []audio.Card
+	flat   []flatProfile
 	cursor int
 	width  int
 	height int
@@ -36,8 +48,9 @@ func (m ProfilesPane) Update(msg tea.Msg) (ProfilesPane, tea.Cmd) {
 			return m, func() tea.Msg { return ErrorMsg{Err: msg.Err} }
 		}
 		m.cards = msg.Cards
-		if m.cursor >= len(m.cards) {
-			m.cursor = max(0, len(m.cards)-1)
+		m.flat = m.flattenProfiles()
+		if m.cursor >= len(m.flat) {
+			m.cursor = max(0, len(m.flat)-1)
 		}
 
 	case SetProfileResultMsg:
@@ -49,7 +62,7 @@ func (m ProfilesPane) Update(msg tea.Msg) (ProfilesPane, tea.Cmd) {
 		return m, tea.Batch(
 			loadProfilesCmd(m.au),
 			func() tea.Msg {
-				return StatusMsg{Text: fmt.Sprintf("Profile set: %s → %s", msg.Card, msg.Profile)}
+				return StatusMsg{Text: fmt.Sprintf("Profile applied: %s → %s", msg.Card, msg.Profile)}
 			},
 		)
 
@@ -66,8 +79,15 @@ func (m ProfilesPane) handleKey(msg tea.KeyMsg) (ProfilesPane, tea.Cmd) {
 			m.cursor--
 		}
 	case key.Matches(msg, m.keys.Down):
-		if m.cursor < len(m.cards)-1 {
+		if m.cursor < len(m.flat)-1 {
 			m.cursor++
+		}
+	case key.Matches(msg, m.keys.Enter):
+		if m.cursor >= 0 && m.cursor < len(m.flat) {
+			fp := m.flat[m.cursor]
+			if !fp.isActive {
+				return m, setProfileCmd(m.au, fp.cardName, fp.profName)
+			}
 		}
 	case key.Matches(msg, m.keys.Refresh):
 		return m, loadProfilesCmd(m.au)
@@ -75,11 +95,24 @@ func (m ProfilesPane) handleKey(msg tea.KeyMsg) (ProfilesPane, tea.Cmd) {
 	return m, nil
 }
 
-func (m ProfilesPane) selected() (audio.ShortRecord, bool) {
-	if m.cursor >= 0 && m.cursor < len(m.cards) {
-		return m.cards[m.cursor], true
+func (m ProfilesPane) flattenProfiles() []flatProfile {
+	var out []flatProfile
+	for _, card := range m.cards {
+		first := true
+		for _, prof := range card.Profiles {
+			out = append(out, flatProfile{
+				cardIndex:     card.Index,
+				cardName:      card.Name,
+				profName:      prof.Name,
+				profDesc:      prof.Description,
+				isActive:      prof.Name == card.ActiveProfile,
+				isAvailable:   prof.Available,
+				isFirstInCard: first,
+			})
+			first = false
+		}
 	}
-	return audio.ShortRecord{}, false
+	return out
 }
 
 func (m ProfilesPane) SetSize(w, h int) ProfilesPane {
@@ -94,7 +127,7 @@ func (m ProfilesPane) View() string {
 		innerW = 50
 	}
 
-	if len(m.cards) == 0 {
+	if len(m.flat) == 0 {
 		emptyBox := sectionBox.Width(innerW).Render(
 			sectionTitle("Audio Cards") + "\n" +
 				dimStyle.Render("  No cards found."),
@@ -102,58 +135,79 @@ func (m ProfilesPane) View() string {
 		return emptyBox
 	}
 
-	// Render each card as its own box section.
+	// Group profiles by card, render each card as a bordered section.
+	type cardGroup struct {
+		name string
+		rows []string
+	}
+	groups := make(map[int]*cardGroup)
+	var order []int
+
+	for i, fp := range m.flat {
+		if fp.isFirstInCard {
+			groups[fp.cardIndex] = &cardGroup{name: fp.cardName}
+			order = append(order, fp.cardIndex)
+		}
+		g := groups[fp.cardIndex]
+		g.rows = append(g.rows, m.renderProfileRow(i, fp))
+	}
+
 	var boxes []string
-	for i, card := range m.cards {
-		isCursor := i == m.cursor
-
-		// Card name becomes the section title
-		cardTitle := sectionTitle(friendlyCardName(card.Name))
-
-		// Cursor + bullet
-		cur := "  "
-		if isCursor {
-			cur = cursorStyle.Render("▸ ")
-		}
-		bullet := disconnectedStyle.Render("○")
-		if isCursor {
-			bullet = connectedStyle.Render("●")
-		}
-
-		nameStr := nameNormalStyle.Render(card.Name)
-		if isCursor {
-			nameStr = nameHighlightStyle.Render(card.Name)
-		}
-
-		driverStr := ""
-		if card.Driver != "" {
-			driverStr = dimStyle.Render("  " + card.Driver)
-		}
-
-		content := fmt.Sprintf("%s%s %s%s", cur, bullet, nameStr, driverStr)
-
-		box := sectionBox.Width(innerW).Render(
-			cardTitle + "\n" + content,
-		)
+	for _, idx := range order {
+		g := groups[idx]
+		title := sectionTitle(friendlyCardName(g.name))
+		content := strings.Join(g.rows, "\n")
+		box := sectionBox.Width(innerW).Render(title + "\n" + content)
 		boxes = append(boxes, box)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		strings.Join(boxes, "\n"),
-	)
+	return lipgloss.JoinVertical(lipgloss.Left, boxes...)
 }
 
 // friendlyCardName derives a human-friendly name from a pactl card name.
 func friendlyCardName(name string) string {
-	// Strip common prefixes like "alsa_card."
 	name = strings.TrimPrefix(name, "alsa_card.")
-	// Replace underscores/dots with spaces for readability
+	name = strings.TrimPrefix(name, "bluez_card.")
 	name = strings.ReplaceAll(name, "_", " ")
 	name = strings.ReplaceAll(name, ".", " ")
 	if len(name) > 40 {
 		name = name[:37] + "..."
 	}
 	return name
+}
+
+func (m ProfilesPane) renderProfileRow(flatIdx int, fp flatProfile) string {
+	isCursor := flatIdx == m.cursor
+
+	cur := "  "
+	if isCursor {
+		cur = cursorStyle.Render("▸ ")
+	}
+
+	// Radio bullet: ● active, ○ inactive
+	bullet := disconnectedStyle.Render("○")
+	if fp.isActive {
+		bullet = connectedStyle.Render("●")
+	}
+
+	// Description (or fallback to name)
+	desc := fp.profDesc
+	if desc == "" {
+		desc = fp.profName
+	}
+
+	descStr := nameNormalStyle.Render(desc)
+	if isCursor {
+		descStr = nameHighlightStyle.Render(desc)
+	}
+
+	// Availability badge
+	avail := ""
+	if !fp.isAvailable {
+		avail = "  " + dimStyle.Render("(unavailable)")
+	}
+
+	return fmt.Sprintf("%s%s %s%s", cur, bullet, descStr, avail)
 }
 
 func (m ProfilesPane) ShortHelp() string {

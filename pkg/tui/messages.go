@@ -70,11 +70,14 @@ type PairResultMsg struct {
 
 // --- Audio domain messages ---
 
-// SinksLoadedMsg carries refreshed sink list.
+// SinksLoadedMsg carries refreshed sink/source/routing data.
 type SinksLoadedMsg struct {
-	Sinks   []audio.ShortRecord
-	Sources []audio.ShortRecord
-	Err     error
+	Sinks             []audio.ShortRecord
+	Sources           []audio.ShortRecord
+	SinkInputs        []audio.SinkInput
+	DefaultSinkName   string
+	DefaultSourceName string
+	Err               error
 }
 
 // SetDefaultResultMsg reports set-default outcome.
@@ -84,9 +87,16 @@ type SetDefaultResultMsg struct {
 	Err  error
 }
 
-// ProfilesLoadedMsg carries refreshed card/profiles list.
+// MoveStreamResultMsg reports move-sink-input outcome.
+type MoveStreamResultMsg struct {
+	StreamID int
+	Sink     string
+	Err      error
+}
+
+// ProfilesLoadedMsg carries refreshed card/profiles data.
 type ProfilesLoadedMsg struct {
-	Cards []audio.ShortRecord
+	Cards []audio.Card
 	Err   error
 }
 
